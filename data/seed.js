@@ -21,11 +21,14 @@ function inDays(offset) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-const item = (title, offset = null) => ({
+const item = (title, offset = null, extra = {}) => ({
   id: id('i'),
   title,
   date: offset === null ? null : inDays(offset),
-  done: false,
+  status: 'todo',
+  points: null,
+  sprintId: null,
+  ...extra,
 });
 
 const bucket = (name, color, pattern, x, y, items) => ({
@@ -33,25 +36,25 @@ const bucket = (name, color, pattern, x, y, items) => ({
 });
 
 const work = bucket('Work', '#4A3E9C', 'crosshatch', 90, 90, [
-  item('Reply to Priya', 0),
-  item('Team offsite', 3),
-  item('Get receipt from Sam', 4),
-  item('Draft pricing page', 5),
-  item('Submit expenses', 7),
-  item('Legal sign-off', 9),
-  item('Ship the redesign', 12),
-  item('Quarterly review', 21),
+  item('Reply to Priya', 0, { points: 1, status: 'done', sprintId: 's-now' }),
+  item('Team offsite', 3, { points: 2, status: 'doing', sprintId: 's-now' }),
+  item('Get receipt from Sam', 4, { points: 1, status: 'doing', sprintId: 's-now' }),
+  item('Draft pricing page', 5, { points: 5, status: 'todo', sprintId: 's-now' }),
+  item('Submit expenses', 7, { points: 2, status: 'todo', sprintId: 's-now' }),
+  item('Legal sign-off', 9, { points: 3 }),
+  item('Ship the redesign', 12, { points: 8 }),
+  item('Quarterly review', 21, { points: 5 }),
 ]);
 
 const learning = bucket('Learning', '#1F7A8C', 'dots', 470, 120, [
-  item('Read pricing research', 1),
-  item('Finish course module 4', 6),
+  item('Read pricing research', 1, { points: 2, status: 'done', sprintId: 's-now' }),
+  item('Finish course module 4', 6, { points: 3 }),
   item('Practice guitar'),
 ]);
 
 const home = bucket('Home', '#A8641F', 'rules', 840, 90, [
-  item('Post office run', 2),
-  item('Hardware store', 2),
+  item('Post office run', 2, { points: 1, status: 'todo', sprintId: 's-now' }),
+  item('Hardware store', 2, { points: 1, status: 'todo', sprintId: 's-now' }),
   item('Fix the porch light'),
   item('Renew car registration', 16),
 ]);
@@ -64,7 +67,7 @@ const weekend = bucket('Weekend', '#C0326B', 'diagonal', 470, 440, [
 ]);
 
 const health = bucket('Health', '#2E7148', 'weave', 90, 560, [
-  item('Dentist', 3),
+  item('Dentist', 3, { points: 1, sprintId: 's-now' }),
   item('Annual physical', 18),
   item('Swim, Tue and Thu'),
 ]);
@@ -86,9 +89,21 @@ const edges = [
   edge('clash', whole(work), whole(weekend), true),
 ];
 
+/**
+ * Two sprints: one running, one queued. The running one is deliberately not
+ * clean — a couple of cards carry unfinished prerequisites so the blocker dots
+ * on the sprint board have something to say.
+ */
+const sprints = [
+  { id: 's-now', name: 'This fortnight', start: inDays(-4), end: inDays(9), status: 'active' },
+  { id: 's-next', name: 'Next up', start: inDays(10), end: inDays(23), status: 'planned' },
+];
+
 export const SEED = {
-  version: 1,
+  version: 2,
   world: { w: 3200, h: 2200 },
   buckets,
   edges,
+  sprints,
+  currentSprint: 's-now',
 };
