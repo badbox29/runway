@@ -5,8 +5,11 @@
  * emits typed change events and this file decides what to redraw for each,
  * which keeps a bucket drag from rebuilding forty cards.
  */
-import { state, subscribe, undo, addBucket, newId, load, removeEdge } from './core/store.js';
+import {
+  state, subscribe, undo, addBucket, newId, load, removeEdge,
+} from './core/store.js';
 import { restore, startAutosave, exportFile, importFile } from './core/persist.js';
+import { initTheme, setScheme, toggleMode, getTheme, schemeList, onThemeChange } from './core/theme.js';
 import { SEED } from '../data/seed.js';
 import { PALETTE } from './config/palette.js';
 
@@ -15,25 +18,29 @@ import { initBuckets, renderBuckets } from './ui/buckets.js';
 import { initEdges, renderEdges } from './ui/edges.js';
 import { initWiring } from './ui/wiring.js';
 import { initCalendar, renderCalendar } from './ui/calendar.js';
+import { initSprints, renderSprints } from './ui/sprints.js';
 import { renderLegend } from './ui/legend.js';
 import { openTypeMenu, openEdgeMenu, closeMenus } from './ui/popover.js';
-import { $, $$ } from './util/dom.js';
+import { $, $$, el } from './util/dom.js';
 
 /* ------------------------------------------------------------- start */
 
+initTheme();
 initCanvas();
 initBuckets();
 initEdges(handleEdgeClick);
 initWiring(handleWireComplete);
 initCalendar();
+initSprints();
 
 /* The seed is plain JSON, so a JSON clone is both sufficient and portable —
    it keeps the module off structuredClone, which older browsers lack. */
 if (!restore()) load(JSON.parse(JSON.stringify(SEED)));
 startAutosave();
 
+buildSchemePicker();
 renderLegend();
-renderAll();
+setView('sprints');
 goHome();
 
 /* --------------------------------------------------------- rendering */
@@ -43,13 +50,21 @@ function renderAll() {
   renderBuckets();
   renderEdges();
   renderCalendar();
+  renderSprints();
 }
 
 subscribe((kind) => {
-  if (kind === 'structure') { renderBuckets(); renderEdges(); renderCalendar(); }
+  if (kind === 'structure') { renderBuckets(); renderEdges(); renderCalendar(); renderSprints(); }
   else if (kind === 'geometry') renderEdges();
-  else if (kind === 'edges') renderEdges();
-  else if (kind === 'view') renderCalendar();
+  else if (kind === 'edges') { renderEdges(); renderSprints(); }
+  else if (kind === 'view') { renderCalendar(); renderSprints(); }
+});
+
+/* A theme change repaints everything that draws colour in JS rather than CSS:
+   the SVG connection layer and every pattern fill. */
+onThemeChange(() => {
+  syncModeButton();
+  renderAll();
 });
 
 /* ------------------------------------------------------ interactions */
@@ -68,23 +83,28 @@ function handleEdgeClick(id, x, y) {
 
 $('#viewSwitch').addEventListener('click', (e) => {
   const button = e.target.closest('[data-view]');
-  if (!button) return;
-  setView(button.dataset.view);
+  if (button) setView(button.dataset.view);
 });
 
 function setView(view) {
   state.view = view;
+  $('#sprints').hidden = view !== 'sprints';
   $('#scroller').hidden = view !== 'canvas';
   $('#calendar').hidden = view !== 'calendar';
   $('#legend').hidden = view !== 'canvas';
   $('#hint').hidden = view !== 'canvas';
-  $('#viewLabel').textContent = view === 'canvas' ? 'canvas' : 'month';
   $$('#viewSwitch .tool').forEach((b) => b.classList.toggle('on', b.dataset.view === view));
-  for (const sel of ['[data-act="add-bucket"]', '[data-act="home"]', '[data-act="zoom-in"]',
-    '[data-act="zoom-out"]', '#zoomLabel']) {
-    $(sel).hidden = view !== 'canvas';
+
+  const canvasOnly = ['[data-act="add-bucket"]', '[data-act="home"]', '[data-act="zoom-in"]',
+    '[data-act="zoom-out"]', '#zoomLabel', '[data-canvas-only]'];
+  for (const sel of canvasOnly) {
+    const node = $(sel);
+    if (node) node.hidden = view !== 'canvas';
   }
-  renderCalendar();
+
+  if (view === 'canvas') { applyWorld(); renderBuckets(); renderEdges(); }
+  if (view === 'calendar') renderCalendar();
+  if (view === 'sprints') renderSprints();
 }
 
 document.addEventListener('click', (e) => {
@@ -98,6 +118,7 @@ document.addEventListener('click', (e) => {
     case 'zoom-out': zoomOut(); break;
     case 'export': exportFile(); break;
     case 'import': $('#fileInput').click(); break;
+    case 'mode': toggleMode(); break;
     default: break;
   }
 });
@@ -109,6 +130,27 @@ $('#fileInput').addEventListener('change', async (e) => {
   catch (err) { alert(err.message); }
   e.target.value = '';
 });
+
+function buildSchemePicker() {
+  const pick = $('#schemePick');
+  for (const s of schemeList()) {
+    pick.appendChild(el('option', { value: s.id, text: s.label, title: s.note }));
+  }
+  pick.value = getTheme().scheme;
+  pick.addEventListener('change', () => setScheme(pick.value));
+  syncModeButton();
+}
+
+function syncModeButton() {
+  const { mode, scheme } = getTheme();
+  const button = $('#modeToggle');
+  if (button) {
+    button.textContent = mode === 'dark' ? 'Light' : 'Dark';
+    button.title = `Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`;
+  }
+  const pick = $('#schemePick');
+  if (pick && pick.value !== scheme) pick.value = scheme;
+}
 
 function createBucket() {
   const name = prompt('Bucket name');
@@ -135,8 +177,7 @@ function createBucket() {
 /* ---------------------------------------------------------- keyboard */
 
 window.addEventListener('keydown', (e) => {
-  const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
-  if (typing) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
 
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault();
@@ -148,6 +189,8 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     removeEdge(state.selectedEdge);
   }
-  if (e.key === 'c' && state.view === 'canvas') setView('calendar');
-  if (e.key === 'b' && state.view === 'calendar') setView('canvas');
+  if (e.key === 's') setView('sprints');
+  if (e.key === 'b') setView('canvas');
+  if (e.key === 'c') setView('calendar');
+  if (e.key === 'd' && !e.metaKey && !e.ctrlKey) toggleMode();
 });
