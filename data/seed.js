@@ -1,76 +1,89 @@
 /**
- * Seed board.
+ * Demo board.
  *
- * Dance dates are taken from the DMA 2026–27 company calendar; the rest is an
- * ordinary autumn around them. The point of seeding with a real season is that
- * the interesting cases — a work deadline landing on a rehearsal night, two
- * optional competitions you can only pick one of — show up on their own.
+ * A generic week of work, home, and life — enough to show every connection
+ * type in use and to give the calendar something to draw. Delete it and start
+ * empty, or replace it with an exported board; this file is the same shape a
+ * board export produces, so it can be swapped wholesale.
  *
- * This file is the same shape as an exported board, so you can edit it by hand.
+ * Dates are computed relative to today rather than hard-coded, so the calendar
+ * always opens on a month with something in it.
  */
 
 let n = 0;
 const id = (p) => `${p}${++n}`;
 
-const item = (title, date = null) => ({ id: id('i'), title, date, done: false });
+/** ISO date this many days from today. */
+function inDays(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+const item = (title, offset = null) => ({
+  id: id('i'),
+  title,
+  date: offset === null ? null : inDays(offset),
+  done: false,
+});
 
 const bucket = (name, color, pattern, x, y, items) => ({
   id: id('b'), name, color, pattern, x, y, w: 222, collapsed: false, items,
 });
 
-const dance = bucket('Dance', '#C0326B', 'diagonal', 90, 90, [
-  item('Specialty rehearsal', '2026-08-28'),
-  item('Fall show performances', '2026-08-30'),
-  item('Costume payment due', '2026-09-04'),
-  item('Confirm Comp #2 roster', '2026-09-18'),
-  item('Book Chattanooga hotel'),
-  item('Nutcracker rehearsal 1 of 4', '2026-10-16'),
-  item('Optional comp — Duluth', '2027-01-29'),
-  item('Optional comp — Jonesboro', '2027-02-19'),
-  item('Ask about carpool'),
+const work = bucket('Work', '#4A3E9C', 'crosshatch', 90, 90, [
+  item('Reply to Priya', 0),
+  item('Team offsite', 3),
+  item('Get receipt from Sam', 4),
+  item('Draft pricing page', 5),
+  item('Submit expenses', 7),
+  item('Legal sign-off', 9),
+  item('Ship the redesign', 12),
+  item('Quarterly review', 21),
 ]);
 
-const school = bucket('School', '#1F7A8C', 'dots', 470, 140, [
-  item('Back-to-school night', '2026-08-31'),
-  item('Picture day order form', '2026-09-08'),
-  item('Progress reports', '2026-09-15'),
-  item('Field trip slip', '2026-10-06'),
+const learning = bucket('Learning', '#1F7A8C', 'dots', 470, 120, [
+  item('Read pricing research', 1),
+  item('Finish course module 4', 6),
+  item('Practice guitar'),
 ]);
 
-const work = bucket('Work', '#4A3E9C', 'crosshatch', 840, 90, [
-  item('Q3 planning doc due', '2026-08-28'),
-  item('Team offsite', '2026-09-02'),
-  item('1:1 with Dana', '2026-09-10'),
-  item('Budget review', '2026-10-01'),
+const home = bucket('Home', '#A8641F', 'rules', 840, 90, [
+  item('Post office run', 2),
+  item('Hardware store', 2),
+  item('Fix the porch light'),
+  item('Renew car registration', 16),
 ]);
 
-const home = bucket('Home', '#A8641F', 'rules', 470, 470, [
-  item('Grocery run', '2026-08-29'),
-  item('HVAC filter', '2026-09-05'),
-  item('Car inspection', '2026-09-12'),
+const weekend = bucket('Weekend', '#C0326B', 'diagonal', 470, 440, [
+  item('Sunday hike', 4),
+  item('Sunday matinee', 4),
+  item('Confirm headcount', 8),
+  item('Book the venue', 10),
 ]);
 
 const health = bucket('Health', '#2E7148', 'weave', 90, 560, [
-  item('Dentist, 4:00', '2026-09-03'),
-  item('Annual physical', '2026-09-09'),
+  item('Dentist', 3),
+  item('Annual physical', 18),
+  item('Swim, Tue and Thu'),
 ]);
 
-const buckets = [dance, school, work, home, health];
+const buckets = [work, learning, home, weekend, health];
 
 const find = (b, title) => ({ kind: 'item', id: b.items.find((i) => i.title === title).id });
 const whole = (b) => ({ kind: 'bucket', id: b.id });
-
 const edge = (type, from, to, behind = false) => ({ id: id('e'), type, from, to, behind });
 
 const edges = [
-  edge('depends', find(dance, 'Book Chattanooga hotel'), find(dance, 'Confirm Comp #2 roster')),
-  edge('blocks', find(dance, 'Nutcracker rehearsal 1 of 4'), find(dance, 'Costume payment due')),
-  edge('either', find(dance, 'Optional comp — Duluth'), find(dance, 'Optional comp — Jonesboro')),
-  edge('clash', find(work, 'Q3 planning doc due'), find(dance, 'Specialty rehearsal')),
-  edge('bundle', find(home, 'Car inspection'), find(health, 'Dentist, 4:00'), true),
-  edge('waiting', find(dance, 'Ask about carpool'), find(school, 'Back-to-school night')),
-  edge('informs', find(school, 'Field trip slip'), find(home, 'Grocery run')),
-  edge('clash', whole(work), whole(dance), true),
+  edge('depends', find(weekend, 'Book the venue'), find(weekend, 'Confirm headcount')),
+  edge('blocks', find(work, 'Ship the redesign'), find(work, 'Legal sign-off')),
+  edge('either', find(weekend, 'Sunday hike'), find(weekend, 'Sunday matinee')),
+  edge('clash', find(work, 'Team offsite'), find(health, 'Dentist')),
+  edge('bundle', find(home, 'Post office run'), find(home, 'Hardware store')),
+  edge('waiting', find(work, 'Submit expenses'), find(work, 'Get receipt from Sam')),
+  edge('informs', find(learning, 'Read pricing research'), find(work, 'Draft pricing page')),
+  edge('clash', whole(work), whole(weekend), true),
 ];
 
 export const SEED = {
