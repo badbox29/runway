@@ -8,7 +8,7 @@
  */
 import { state, serialize, load, subscribe } from './store.js';
 
-const KEY = 'buckets.board.v1';
+const KEY = 'runway.board.v2';
 let timer = null;
 
 export function save() {
@@ -23,11 +23,13 @@ export function save() {
 
 export function restore() {
   try {
-    const raw = localStorage.getItem(KEY);
+    /* A v1 board is still readable: store.load() folds `done` into `status`
+       and fills in the sprint fields, so an upgrade never loses a board. */
+    const raw = localStorage.getItem(KEY) || localStorage.getItem('runway.board.v1');
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (!data || !Array.isArray(data.buckets) || !data.buckets.length) return false;
-    load(data);
+    load(data);  /* store.load() migrates older shapes on the way in */
     return true;
   } catch (err) {
     console.warn('Saved board was unreadable, starting from seed:', err);
@@ -52,7 +54,7 @@ export function exportFile() {
   const a = document.createElement('a');
   const stamp = new Date().toISOString().slice(0, 10);
   a.href = url;
-  a.download = `buckets-${stamp}.json`;
+  a.download = `runway-${stamp}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
