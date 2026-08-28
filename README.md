@@ -92,9 +92,6 @@ js/
     dates.js          ISO date handling and formatting
 data/
   seed.js             starting board, same shape as an export
-test/
-  geometry.test.mjs   routing and rect math, no dependencies
-  smoke.test.mjs      full boot in jsdom
 ```
 
 ## How it works
