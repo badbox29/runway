@@ -17,6 +17,8 @@ import {
   routeAround, roundedPath, curvedPath, midpointOf,
 } from '../core/geometry.js';
 import { el, $, $$ } from '../util/dom.js';
+import { adapt } from '../util/patterns.js';
+import { token } from '../core/theme.js';
 
 let under;
 let over;
@@ -34,7 +36,8 @@ export function initEdges(onEdgeClick) {
 
 function markerDefs() {
   let defs = '<defs>';
-  for (const [key, t] of Object.entries(TYPES)) {
+  for (const [key, raw] of Object.entries(TYPES)) {
+    const t = { ...raw, color: adapt(raw.color) };
     defs += `<marker id="m-${key}-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${t.color}"/></marker>`;
     defs += `<marker id="m-${key}-arrowOpen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9" fill="none" stroke="${t.color}" stroke-width="1.6"/></marker>`;
     defs += `<marker id="m-${key}-bar" viewBox="0 0 10 10" refX="3" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M2,0 L2,10" stroke="${t.color}" stroke-width="3.4"/></marker>`;
@@ -48,6 +51,10 @@ function markerDefs() {
  */
 export function renderEdges(tempWire = null) {
   if (!over) return;
+  /* Read the live tokens once per pass: SVG strokes need real colours, and the
+     casing must match whatever paper the current scheme is using. */
+  const ground = token('--ground') || '#EAEDF0';
+  const ink = token('--ink') || '#141C26';
   const layers = { under: markerDefs(), over: markerDefs() };
   $$('.edgelabel', nodes).forEach((n) => n.remove());
 
@@ -60,7 +67,8 @@ export function renderEdges(tempWire = null) {
     const cb = { x: rb.x + rb.w / 2, y: rb.y + rb.h / 2 };
     const a = anchorOn(ra, cb);
     const b = anchorOn(rb, ca);
-    const t = typeOf(edge.type);
+    const base = typeOf(edge.type);
+    const t = { ...base, color: adapt(base.color) };
     const selected = state.selectedEdge === edge.id;
 
     const exempt = [ownerBucketId(state, edge.from), ownerBucketId(state, edge.to)];
@@ -80,7 +88,7 @@ export function renderEdges(tempWire = null) {
 
     let g = '';
     if (!edge.behind) {
-      g += `<path d="${d}" fill="none" stroke="#EAEDF0" stroke-width="${t.width + 3.5}" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>`;
+      g += `<path d="${d}" fill="none" stroke="${ground}" stroke-width="${t.width + 3.5}" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>`;
     }
     g += `<path d="${d}" fill="none" stroke="${t.color}" stroke-width="${width}" stroke-dasharray="${t.dash}" stroke-linecap="round" stroke-linejoin="round" opacity="${edge.behind ? 0.5 : 1}" ${marker}/>`;
     g += `<path class="hit" data-edge="${edge.id}" d="${d}" fill="none" stroke="transparent" stroke-width="16"/>`;
@@ -99,8 +107,8 @@ export function renderEdges(tempWire = null) {
 
   if (tempWire) {
     layers.over +=
-      `<path d="M ${tempWire.a.x} ${tempWire.a.y} L ${tempWire.b.x} ${tempWire.b.y}" fill="none" stroke="#141C26" stroke-width="2" stroke-dasharray="4 4"/>` +
-      `<circle cx="${tempWire.b.x}" cy="${tempWire.b.y}" r="4" fill="#141C26"/>`;
+      `<path d="M ${tempWire.a.x} ${tempWire.a.y} L ${tempWire.b.x} ${tempWire.b.y}" fill="none" stroke="${ink}" stroke-width="2" stroke-dasharray="4 4"/>` +
+      `<circle cx="${tempWire.b.x}" cy="${tempWire.b.y}" r="4" fill="${ink}"/>`;
   }
 
   under.innerHTML = layers.under;

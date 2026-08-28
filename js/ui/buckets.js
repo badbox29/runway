@@ -82,7 +82,7 @@ function rowFor(b, item) {
   knob.addEventListener('pointerdown', (e) => startWire(e, { kind: 'item', id: item.id }));
 
   const row = el('div', {
-    class: `row${item.done ? ' done' : ''}`,
+    class: `row${item.status === 'done' ? ' done' : ''}`,
     dataset: { node: `item:${item.id}`, id: item.id },
   }, [
     el('div', { class: 'txt', text: item.title }),
@@ -163,7 +163,7 @@ function bindDragging() {
     if (d.moved && d.target) moveItem(d.item.id, d.target);
     else if (!d.moved) {
       commit();
-      d.item.done = !d.item.done;
+      d.item.status = d.item.status === 'done' ? 'todo' : 'done';
       emit('structure');
     }
   });

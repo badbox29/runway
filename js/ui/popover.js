@@ -9,7 +9,8 @@ import { TYPES, typeOf } from '../config/types.js';
 import { PALETTE, PATTERNS } from '../config/palette.js';
 import {
   state, addEdge, updateEdge, removeEdge, updateItem, removeItem,
-  removeBucket, commit, emit, labelFor,
+  removeBucket, commit, emit, labelFor, assignToSprint, blockersFor,
+  POINT_SCALE, STATUSES,
 } from '../core/store.js';
 import { fillCSS } from '../util/patterns.js';
 import { el } from '../util/dom.js';
@@ -107,7 +108,7 @@ export function openEdgeMenu(x, y, id) {
 
 export function openItemMenu(x, y, item) {
   const pop = popAt(x, y);
-  pop.appendChild(el('div', { class: 'ph', text: 'Item' }));
+  pop.appendChild(el('div', { class: 'ph', text: 'Task' }));
 
   const title = el('input', { type: 'text', value: item.title });
   title.addEventListener('change', () => updateItem(item.id, { title: title.value.trim() || item.title }));
@@ -117,16 +118,72 @@ export function openItemMenu(x, y, item) {
   date.addEventListener('change', () => updateItem(item.id, { date: date.value || null }));
   pop.appendChild(date);
 
+  /* Estimate. Null is a real state — an unestimated task is not a zero-point
+     task, and collapsing the two hides work from the burn figures. */
+  pop.appendChild(el('div', { class: 'ph', text: 'Points' }));
+  const points = el('div', { style: 'display:flex;gap:4px;padding:0 4px 8px;flex-wrap:wrap' });
+  for (const value of [null, ...POINT_SCALE]) {
+    const on = item.points === value;
+    const chip = el('button', {
+      class: `opt${on ? ' on' : ''}`,
+      style: 'width:auto;justify-content:center;min-width:30px;padding:5px 8px;'
+        + `border:1px solid ${on ? 'var(--ink)' : 'var(--line)'};font-weight:700`,
+      text: value === null ? '–' : String(value),
+    });
+    chip.addEventListener('click', () => { updateItem(item.id, { points: value }); closeMenus(); });
+    points.appendChild(chip);
+  }
+  pop.appendChild(points);
+
+  /* Sprint assignment. Bucket and sprint are orthogonal: this never moves the
+     task out of the part of your life it belongs to. */
+  pop.appendChild(el('div', { class: 'ph', text: 'Sprint' }));
+  const backlog = el('button', {
+    class: `opt${!item.sprintId ? ' on' : ''}`,
+    text: 'Backlog',
+  });
+  backlog.addEventListener('click', () => { assignToSprint(item.id, null); closeMenus(); });
+  pop.appendChild(backlog);
+  for (const sprint of state.sprints) {
+    const on = item.sprintId === sprint.id;
+    const opt = el('button', { class: `opt${on ? ' on' : ''}` }, [
+      el('span', {}, [
+        document.createTextNode(sprint.name),
+        el('span', { class: 'sub', text: sprint.status }),
+      ]),
+    ]);
+    opt.addEventListener('click', () => { assignToSprint(item.id, sprint.id, 'todo'); closeMenus(); });
+    pop.appendChild(opt);
+  }
+
   pop.appendChild(el('div', { class: 'sep' }));
 
-  const done = el('button', { class: 'opt', text: item.done ? 'Mark not done' : 'Mark done' });
-  done.addEventListener('click', () => {
-    updateItem(item.id, { done: !item.done });
-    closeMenus();
-  });
-  pop.appendChild(done);
+  for (const status of STATUSES) {
+    const on = item.status === status;
+    const label = { todo: 'To do', doing: 'In progress', done: 'Done' }[status];
+    const opt = el('button', { class: `opt${on ? ' on' : ''}`, text: label });
+    opt.addEventListener('click', () => { updateItem(item.id, { status }); closeMenus(); });
+    pop.appendChild(opt);
+  }
 
-  const del = el('button', { class: 'opt danger', text: 'Delete item' });
+  const blockers = blockersFor(item.id);
+  if (blockers.length) {
+    pop.appendChild(el('div', { class: 'sep' }));
+    pop.appendChild(el('div', { class: 'ph', text: 'Waiting on' }));
+    for (const b of blockers) {
+      pop.appendChild(el('div', {
+        class: 'opt',
+        style: 'cursor:default',
+      }, [el('span', {}, [
+        document.createTextNode(b.item.title),
+        el('span', { class: 'sub', text: `${b.type} · ${b.bucket.name}` }),
+      ])]));
+    }
+  }
+
+  pop.appendChild(el('div', { class: 'sep' }));
+
+  const del = el('button', { class: 'opt danger', text: 'Delete task' });
   del.addEventListener('click', () => { removeItem(item.id); closeMenus(); });
   pop.appendChild(del);
 }
@@ -150,7 +207,7 @@ export function openBucketMenu(x, y, bucket) {
     const chip = el('button', {
       title: p.color,
       style: `${fillCSS(p.color, p.pattern, 1)};width:24px;height:24px;border-radius:2px;border:1px solid ${
-        bucket.color === p.color ? '#141C26' : 'rgba(0,0,0,.14)'};`,
+        bucket.color === p.color ? 'var(--ink)' : 'var(--line)'};`,
     });
     chip.addEventListener('click', () => {
       commit();
@@ -167,7 +224,7 @@ export function openBucketMenu(x, y, bucket) {
     const chip = el('button', {
       title: pattern,
       style: `${fillCSS(bucket.color, pattern, 1)};width:24px;height:24px;border-radius:2px;border:1px solid ${
-        bucket.pattern === pattern ? '#141C26' : 'rgba(0,0,0,.14)'};`,
+        bucket.pattern === pattern ? 'var(--ink)' : 'var(--line)'};`,
     });
     chip.addEventListener('click', () => {
       commit();
