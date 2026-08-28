@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Buckets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/chrome.css">
+<link rel="stylesheet" href="css/canvas.css">
+<link rel="stylesheet" href="css/bucket.css">
+<link rel="stylesheet" href="css/popover.css">
+<link rel="stylesheet" href="css/calendar.css">
+</head>
+<body>
+
+<header id="bar">
+  <h1>Buckets</h1>
+  <span class="eyebrow" id="viewLabel">canvas</span>
+  <nav class="group" id="viewSwitch">
+    <button class="tool on" data-view="canvas">Canvas</button>
+    <button class="tool" data-view="calendar">Month</button>
+  </nav>
+  <button class="tool" data-act="add-bucket">+ Bucket</button>
+  <button class="tool" data-act="home">Home</button>
+  <span class="spacer"></span>
+  <button class="tool" data-act="undo" title="Undo (⌘Z)">Undo</button>
+  <button class="tool" data-act="export">Export</button>
+  <button class="tool" data-act="import">Import</button>
+  <span class="rule"></span>
+  <button class="tool" data-act="zoom-out" aria-label="Zoom out">&minus;</button>
+  <span class="eyebrow zoom" id="zoomLabel">100%</span>
+  <button class="tool" data-act="zoom-in" aria-label="Zoom in">+</button>
+</header>
+
+<main id="scroller">
+  <div id="canvas">
+    <div id="world">
+      <svg id="layer-under" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="layer-nodes"></div>
+      <svg id="layer-over" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+</main>
+
+<section id="calendar" hidden></section>
+
+<aside id="legend"></aside>
+
+<p id="hint">
+  Drag a bucket by its header &middot; drag empty space to pan<br>
+  Drag a <b>&#9711;</b> onto another card or row to connect<br>
+  Click a line to retype, reroute, or cut it
+</p>
+
+<input type="file" id="fileInput" accept="application/json" hidden>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
