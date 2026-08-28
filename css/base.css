@@ -1,0 +1,18 @@
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;overflow:hidden;}
+body{
+  font-family:var(--body);
+  color:var(--ink);
+  background:var(--ground);
+  -webkit-tap-highlight-color:transparent;
+}
+button{font:inherit;color:inherit;cursor:pointer;}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;}}
+
+.eyebrow{
+  font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;
+}
+.spacer{flex:1;}
+.rule{width:1px;height:22px;background:var(--line);}

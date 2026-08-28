@@ -1,0 +1,26 @@
+/* Design tokens. Every colour and metric in the app resolves here. */
+:root{
+  /* surface */
+  --ink:#141C26;
+  --muted:#6B7A8C;
+  --ground:#EAEDF0;
+  --surface:#FFFFFF;
+  --line:#D2D8DE;
+  --hairline:#EDF0F3;
+  --wash:#F4F7FA;
+
+  /* type */
+  --display:'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --body:'Public Sans', ui-sans-serif, system-ui, sans-serif;
+
+  /* card metrics — geometry.js mirrors these, keep them in sync */
+  --strip-h:7px;
+  --head-h:27px;
+  --row-h:26px;
+  --foot-h:22px;
+  --bucket-w:222px;
+
+  /* chrome */
+  --bar-h:52px;
+  --radius:3px;
+}

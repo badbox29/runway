@@ -1,0 +1,24 @@
+.pop{
+  position:fixed;z-index:50;background:var(--surface);
+  border:1px solid var(--ink);border-radius:var(--radius);
+  box-shadow:0 12px 28px rgba(20,28,38,.20);
+  padding:6px;min-width:212px;max-height:82vh;overflow:auto;
+}
+.pop .ph{
+  font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;padding:4px 6px 6px;
+}
+.pop .opt{
+  display:flex;align-items:center;gap:8px;width:100%;
+  background:none;border:none;padding:6px;border-radius:2px;
+  font-size:12.5px;font-weight:500;text-align:left;
+}
+.pop .opt:hover{background:var(--wash);}
+.pop .opt.on{background:var(--wash);font-weight:700;}
+.pop .opt .sub{color:var(--muted);font-size:10.5px;font-weight:400;display:block;}
+.pop .opt.danger{color:#A81D28;}
+.pop .sep{height:1px;background:var(--line);margin:5px 2px;}
+.pop input[type=text],.pop input[type=date]{
+  width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:2px;
+  font:inherit;font-size:12.5px;color:var(--ink);background:var(--surface);margin-bottom:6px;
+}
