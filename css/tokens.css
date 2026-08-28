@@ -1,19 +1,19 @@
-/* Design tokens. Every colour and metric in the app resolves here. */
+/**
+ * Design tokens.
+ *
+ * Three schemes × two modes. A scheme sets the paper: ground, surface, ink,
+ * lines. Bucket and connection colours are not themed here — they are identity,
+ * stored on the board, and lifted for dark mode at render time instead.
+ *
+ * `color-scheme` is set per mode so native controls (the date picker in the
+ * item menu, scrollbars) follow along instead of staying stubbornly white.
+ */
 :root{
-  /* surface */
-  --ink:#141C26;
-  --muted:#6B7A8C;
-  --ground:#EAEDF0;
-  --surface:#FFFFFF;
-  --line:#D2D8DE;
-  --hairline:#EDF0F3;
-  --wash:#F4F7FA;
-
   /* type */
   --display:'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
   --body:'Public Sans', ui-sans-serif, system-ui, sans-serif;
 
-  /* card metrics — geometry.js mirrors these, keep them in sync */
+  /* card metrics — core/geometry.js mirrors these, keep them in sync */
   --strip-h:7px;
   --head-h:27px;
   --row-h:26px;
@@ -23,4 +23,64 @@
   /* chrome */
   --bar-h:52px;
   --radius:3px;
+
+  /* defaults, overridden by every scheme block below */
+  --ink:#141C26;
+  --muted:#6B7A8C;
+  --ground:#EAEDF0;
+  --surface:#FFFFFF;
+  --line:#D2D8DE;
+  --hairline:#EDF0F3;
+  --wash:#F4F7FA;
+  --grid:#CFD6DD;
+  --shadow:rgba(20,28,38,.16);
+  --danger:#A81D28;
+}
+
+/* ---------------------------------------------------------------- Paper
+   Cool slate on off-white. The original scheme: quiet, printerly, gets out
+   of the way of the buckets. */
+:root[data-scheme="paper"][data-mode="light"]{
+  color-scheme:light;
+  --ink:#141C26; --muted:#6B7A8C; --ground:#EAEDF0; --surface:#FFFFFF;
+  --line:#D2D8DE; --hairline:#EDF0F3; --wash:#F4F7FA; --grid:#CFD6DD;
+  --shadow:rgba(20,28,38,.16); --danger:#A81D28;
+}
+:root[data-scheme="paper"][data-mode="dark"]{
+  color-scheme:dark;
+  --ink:#E3E9EF; --muted:#8A98A6; --ground:#131A22; --surface:#1C242E;
+  --line:#2E3945; --hairline:#232C36; --wash:#232D38; --grid:#232E39;
+  --shadow:rgba(0,0,0,.55); --danger:#F08592;
+}
+
+/* ----------------------------------------------------------------- Clay
+   Warm stone. Lower contrast on purpose — the scheme to pick when the board
+   is going to be open all day. */
+:root[data-scheme="clay"][data-mode="light"]{
+  color-scheme:light;
+  --ink:#241E19; --muted:#7C7167; --ground:#EFE9E3; --surface:#FDFBF9;
+  --line:#DCD3CA; --hairline:#F1ECE7; --wash:#F7F3EF; --grid:#D9CFC5;
+  --shadow:rgba(36,30,25,.16); --danger:#A3331F;
+}
+:root[data-scheme="clay"][data-mode="dark"]{
+  color-scheme:dark;
+  --ink:#EFE7DE; --muted:#9A8D80; --ground:#17130F; --surface:#221D17;
+  --line:#352D25; --hairline:#28221B; --wash:#2C251D; --grid:#2A231C;
+  --shadow:rgba(0,0,0,.6); --danger:#EE8B72;
+}
+
+/* --------------------------------------------------------------- Signal
+   Near-black ink, crisp white surface, cool grey rules. For a dense board
+   where you want the edges of everything to be unambiguous. */
+:root[data-scheme="signal"][data-mode="light"]{
+  color-scheme:light;
+  --ink:#0B0D12; --muted:#5F6673; --ground:#F4F5F7; --surface:#FFFFFF;
+  --line:#C9CDD6; --hairline:#EDEFF2; --wash:#EFF1F5; --grid:#C7CCD6;
+  --shadow:rgba(11,13,18,.18); --danger:#B4121F;
+}
+:root[data-scheme="signal"][data-mode="dark"]{
+  color-scheme:dark;
+  --ink:#F2F4F8; --muted:#8990A0; --ground:#0A0B0F; --surface:#15171E;
+  --line:#282C36; --hairline:#1C1F27; --wash:#1F232C; --grid:#1B1E26;
+  --shadow:rgba(0,0,0,.7); --danger:#FF8A93;
 }

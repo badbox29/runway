@@ -1,6 +1,6 @@
 #scroller{
   position:fixed;inset:var(--bar-h) 0 0 0;overflow:auto;
-  background:radial-gradient(circle at 1px 1px,#CFD6DD 1px,transparent 1.4px);
+  background:radial-gradient(circle at 1px 1px,var(--grid) 1px,transparent 1.4px);
   background-size:24px 24px;
   cursor:grab;
 }

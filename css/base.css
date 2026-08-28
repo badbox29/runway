@@ -8,6 +8,12 @@ body{
 }
 button{font:inherit;color:inherit;cursor:pointer;}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+[hidden]{display:none !important;}
+
+/* Theme changes fade rather than snap. Motion preference still wins. */
+body,.bucket,.row,.pop,.cal-cell,.sp-card,.sp-lane,.tool{
+  transition:background-color .18s ease, color .18s ease, border-color .18s ease;
+}
 @media (prefers-reduced-motion:reduce){*{transition:none !important;}}
 
 .eyebrow{
