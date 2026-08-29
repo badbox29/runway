@@ -46,3 +46,8 @@
   display:flex;align-items:center;gap:8px;padding:12px 16px;
   border-top:1px solid var(--line);background:var(--wash);
 }
+
+/* Drops are consequences, not choices — no checkbox, and marked as settled. */
+.rs-item.fixed{cursor:default;background:var(--wash);}
+.rs-item.fixed .rs-title{text-decoration:line-through;color:var(--muted);}
+.rs-tag.drop{color:var(--danger);border-color:var(--danger);}

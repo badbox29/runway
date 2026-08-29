@@ -171,3 +171,7 @@
   border-radius:2px;padding:6px 8px;font:inherit;font-size:12px;min-width:0;
 }
 .sp-new input{flex:1;max-width:460px;}
+
+.sp-row.dropped .sp-text{text-decoration:line-through;color:var(--muted);opacity:.65;}
+.sp-row.dropped{background:repeating-linear-gradient(
+  135deg, transparent 0 6px, var(--wash) 6px 12px);}

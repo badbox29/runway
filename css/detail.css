@@ -109,3 +109,14 @@
 .dt-comment-text{margin:0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;}
 .dt-post{display:flex;flex-direction:column;align-items:flex-start;gap:0;}
 .dt-post .dt-mini{align-self:flex-end;}
+
+.dt-dropped{
+  padding:9px 10px;margin-bottom:10px;font-size:12px;line-height:1.5;
+  background:var(--wash);border-left:3px solid var(--muted);border-radius:2px;
+}
+.dt-restore{
+  width:100%;margin-bottom:12px;border:1px solid var(--ink);background:none;
+  color:var(--ink);border-radius:2px;padding:7px;font-size:12px;font-weight:600;
+}
+.dt-actions{display:flex;gap:6px;}
+.dt-actions .dt-danger{flex:1;margin-top:4px;}

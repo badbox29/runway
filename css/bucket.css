@@ -54,3 +54,8 @@
   color:var(--muted);font-weight:700;border-top:1px solid var(--hairline);cursor:pointer;
 }
 .foot:hover{color:var(--ink);}
+
+/* Decided against. Still legible — the point of keeping it is that you can read
+   what you passed over and why. */
+.row.dropped .txt{text-decoration:line-through;color:var(--muted);opacity:.6;}
+.row.dropped .when{opacity:.5;}
