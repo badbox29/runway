@@ -43,7 +43,7 @@ function inDays(offset) {
  * @param {object} extra        ref, status, points, sprintId
  */
 function task(title, offset = null, extra = {}) {
-  const { ref, ...rest } = extra;
+  const { ref, comments = [], ...rest } = extra;
   const item = {
     id: id('i'),
     title,
@@ -51,6 +51,12 @@ function task(title, offset = null, extra = {}) {
     status: offset !== null && offset < 0 ? 'done' : 'todo',
     points: null,
     sprintId: null,
+    notes: '',
+    comments: comments.map((text, i) => ({
+      id: id('c'),
+      at: new Date(Date.now() - (comments.length - i) * 36e5).toISOString(),
+      text,
+    })),
     ...rest,
   };
   if (ref) {
@@ -81,12 +87,23 @@ const work = bucket('Work', '#4A3E9C', 'crosshatch', [
   task('Reply to Priya', 0, { status: 'done', points: 1, sprintId: 's-now' }),
   task('Team offsite', 3, { status: 'doing', points: 2, sprintId: 's-now' }),
   task('Get receipt from Sam', 4, { status: 'doing', points: 1, sprintId: 's-now', ref: 'receipt' }),
-  task('Draft pricing page', 5, { points: 5, sprintId: 's-now', ref: 'pricing-page' }),
+  task('Draft pricing page', 5, {
+    points: 5, sprintId: 's-now', ref: 'pricing-page',
+    notes: 'Three tiers, annual toggle. Reuse the comparison table from the deck.',
+    comments: [
+      'Priya wants the enterprise tier above the fold.',
+      'Blocked on the research read — holding until that lands.',
+    ],
+  }),
   task('Interview loop — backend', 6, { points: 2, sprintId: 's-now', ref: 'loop' }),
   task('Interview debrief', 7, { points: 1, sprintId: 's-now', ref: 'debrief' }),
   task('Submit expenses', 7, { points: 2, sprintId: 's-now', ref: 'expenses' }),
   task('Legal sign-off', 9, { points: 3, sprintId: 's-next', ref: 'legal' }),
-  task('Ship the redesign', 12, { points: 8, sprintId: 's-next', ref: 'ship' }),
+  task('Ship the redesign', 12, {
+    points: 8, sprintId: 's-next', ref: 'ship',
+    notes: 'Staged rollout: 10% for a day, then everyone.',
+    comments: ['Legal sign-off is the only real gate left.'],
+  }),
   task('Security training', 14, { points: 1 }),
   task('Update the runbook', 18, { points: 2 }),
   task('Quarterly review', 21, { points: 5, sprintId: 's-later', ref: 'qreview' }),
@@ -312,7 +329,7 @@ const world = layout(buckets);
  */
 export const SEED = {
   version: 2,
-  seedVersion: 3,
+  seedVersion: 4,
   world,
   buckets,
   edges,
