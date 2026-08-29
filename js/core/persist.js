@@ -6,7 +6,7 @@
  * exported shape is the same one the seed file uses, which makes hand-editing
  * a board in a text editor a supported workflow rather than an accident.
  */
-import { state, serialize, load, subscribe } from './store.js';
+import { state, serialize, subscribe } from './store.js';
 
 const KEY = 'runway.board.v2';
 let timer = null;
@@ -21,24 +21,36 @@ export function save() {
   }
 }
 
-export function restore() {
+/**
+ * Read the saved board without applying it.
+ *
+ * Deliberately does not call load(): whether a saved board should win over the
+ * bundled demo is a policy question, and policy lives in main.js. An earlier
+ * version decided here, which meant a new data/seed.js had no effect for
+ * anyone who had ever opened the app — the saved board silently won forever.
+ *
+ * @returns {object|null} the parsed board, or null if there isn't a usable one
+ */
+export function readSaved() {
   try {
     /* A v1 board is still readable: store.load() folds `done` into `status`
        and fills in the sprint fields, so an upgrade never loses a board. */
     const raw = localStorage.getItem(KEY) || localStorage.getItem('runway.board.v1');
-    if (!raw) return false;
+    if (!raw) return null;
     const data = JSON.parse(raw);
-    if (!data || !Array.isArray(data.buckets) || !data.buckets.length) return false;
-    load(data);  /* store.load() migrates older shapes on the way in */
-    return true;
+    if (!data || !Array.isArray(data.buckets) || !data.buckets.length) return null;
+    return data;
   } catch (err) {
-    console.warn('Saved board was unreadable, starting from seed:', err);
-    return false;
+    console.warn('Saved board was unreadable, falling back to the demo board:', err);
+    return null;
   }
 }
 
 export function clearSaved() {
-  try { localStorage.removeItem(KEY); } catch { /* nothing to do */ }
+  try {
+    localStorage.removeItem(KEY);
+    localStorage.removeItem('runway.board.v1');
+  } catch { /* nothing to do */ }
 }
 
 export function startAutosave(delay = 500) {

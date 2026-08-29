@@ -28,6 +28,11 @@ export const state = {
   edges: [],
   sprints: [],
   currentSprint: null,
+  /* True while the board is still the untouched demo. The first edit clears
+     it, which is what lets a newer demo replace an older one without ever
+     overwriting work someone has actually done. */
+  fromSeed: false,
+  seedVersion: null,
   world: { w: 3200, h: 2200 },
   zoom: 1,
   view: 'sprints',
@@ -57,8 +62,15 @@ const MAX_UNDO = 60;
 const snapshot = () =>
   JSON.stringify({ buckets: state.buckets, edges: state.edges, sprints: state.sprints });
 
-/** Call before a mutation you want to be undoable. */
+/**
+ * Call before a mutation you want to be undoable.
+ *
+ * This is also the single place that knows a board has been touched: every
+ * mutation goes through here, so clearing `fromSeed` here means no future
+ * mutation can forget to.
+ */
 export function commit() {
+  state.fromSeed = false;
   undoStack.push(snapshot());
   if (undoStack.length > MAX_UNDO) undoStack.shift();
 }
@@ -366,7 +378,12 @@ function normalize(data) {
   };
 }
 
-export function load(data) {
+/**
+ * @param {object} data
+ * @param {{fromSeed?: boolean, seedVersion?: number}} [origin]
+ *        set when the board came from data/seed.js rather than from storage
+ */
+export function load(data, origin = {}) {
   const clean = normalize(data);
   state.buckets = clean.buckets;
   state.edges = clean.edges;
@@ -377,6 +394,8 @@ export function load(data) {
     || state.sprints[0]?.id
     || null;
   state.selectedEdge = null;
+  state.fromSeed = origin.fromSeed ?? data.fromSeed ?? false;
+  state.seedVersion = origin.seedVersion ?? data.seedVersion ?? null;
   emit('structure');
 }
 
@@ -388,4 +407,6 @@ export const serialize = () => ({
   edges: state.edges,
   sprints: state.sprints,
   currentSprint: state.currentSprint,
+  fromSeed: state.fromSeed,
+  seedVersion: state.seedVersion,
 });
