@@ -58,6 +58,7 @@ export function emit(kind = 'structure') {
 
 const undoStack = [];
 const MAX_UNDO = 60;
+let batching = false;
 
 const snapshot = () =>
   JSON.stringify({ buckets: state.buckets, edges: state.edges, sprints: state.sprints });
@@ -71,8 +72,23 @@ const snapshot = () =>
  */
 export function commit() {
   state.fromSeed = false;
+  if (batching) return;
   undoStack.push(snapshot());
   if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+
+/**
+ * Run several mutations as one undoable step.
+ *
+ * Pulling a task into a sprint can drag half a dependency chain with it. That
+ * is one decision from where the user is standing, so it should be one press
+ * of undo — not eleven.
+ */
+export function batch(fn) {
+  if (batching) return fn();
+  commit();
+  batching = true;
+  try { return fn(); } finally { batching = false; emit('structure'); }
 }
 
 export function undo() {
@@ -108,6 +124,28 @@ export function allItems() {
 }
 
 export const getSprint = (id) => state.sprints.find((s) => s.id === id);
+
+/** The one sprint currently being worked, if any. */
+export const activeSprint = () => state.sprints.find((s) => s.status === 'active') || null;
+
+/** Committed to the sprint that is actually running right now. */
+export function isCommitted(item) {
+  const active = activeSprint();
+  return !!(active && item.sprintId === active.id);
+}
+
+/**
+ * Whether a task's date falls inside the window it is committed to.
+ *
+ * `date` is when a thing happens; `sprintId` is when you promised to deal with
+ * it. Those are different claims and they can disagree — a task dated three
+ * weeks out sitting in this fortnight's sprint is a planning error worth
+ * surfacing, not something to silently rewrite.
+ */
+export function dateFitsSprint(item, sprint) {
+  if (!item.date || !sprint || !sprint.start || !sprint.end) return true;
+  return item.date >= sprint.start && item.date <= sprint.end;
+}
 
 /** Everything not committed to a sprint. */
 export const backlogItems = () => allItems().filter(({ item }) => !item.sprintId);
@@ -207,8 +245,30 @@ export function removeBucket(id) {
 export function addItem(bucketId, title, extra = {}) {
   commit();
   getBucket(bucketId)?.items.push({
-    id: newId('i'), title, date: null, status: 'todo', points: null, sprintId: null, ...extra,
+    id: newId('i'), title, date: null, status: 'todo', points: null, sprintId: null,
+    notes: '', comments: [], ...extra,
   });
+  emit('structure');
+}
+
+export function addComment(itemId, text) {
+  const body = String(text || '').trim();
+  if (!body) return;
+  commit();
+  const found = getItem(itemId);
+  if (found) {
+    if (!Array.isArray(found.item.comments)) found.item.comments = [];
+    found.item.comments.push({ id: newId('c'), at: new Date().toISOString(), text: body });
+  }
+  emit('structure');
+}
+
+export function removeComment(itemId, commentId) {
+  commit();
+  const found = getItem(itemId);
+  if (found && Array.isArray(found.item.comments)) {
+    found.item.comments = found.item.comments.filter((c) => c.id !== commentId);
+  }
   emit('structure');
 }
 
@@ -359,13 +419,18 @@ function normalize(data) {
     ...b,
     items: (b.items || []).map((item) => {
       const { done, ...rest } = item;
+      /* Defaults first, the saved fields over them, then the two that need
+         repairing rather than defaulting: `status` folds in the old `done`
+         boolean, and `comments` must end up an array even if an older board
+         has no such field. */
       return {
         date: null,
         points: null,
         sprintId: null,
-        status: done ? 'done' : 'todo',
+        notes: '',
         ...rest,
-        ...(rest.status ? { status: rest.status } : {}),
+        status: rest.status || (done ? 'done' : 'todo'),
+        comments: Array.isArray(rest.comments) ? rest.comments : [],
       };
     }),
   }));
