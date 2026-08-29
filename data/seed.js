@@ -303,8 +303,16 @@ function layout(list) {
 
 const world = layout(buckets);
 
+/**
+ * Bump `seedVersion` whenever you change this file.
+ *
+ * On boot, a saved board that is still the untouched demo and carries an older
+ * generation is replaced by this one. A board anyone has actually edited is
+ * never replaced, whatever this number says.
+ */
 export const SEED = {
   version: 2,
+  seedVersion: 3,
   world,
   buckets,
   edges,
