@@ -20,20 +20,15 @@
  */
 import {
   state, backlogItems, droppedItems, sprintItems, getSprint, blockersFor, progressOf, daysUntil,
-  addSprint, startSprint, completeSprint, removeSprint, updateItem,
-  cyclePoints, addItem, emit, dateFitsSprint, STATUSES,
+  addSprint, startSprint, completeSprint, removeSprint, getColumn, laneOf, setLane,
+  isDerivedBlocked, cyclePoints, addItem, emit, dateFitsSprint,
 } from '../core/store.js';
 import { fillCSS } from '../util/patterns.js';
 import { longDate, shortDate } from '../util/dates.js';
 import { el, $, $$, clear } from '../util/dom.js';
 import { openDetail } from './detail.js';
+import { openColumnsMenu } from './popover.js';
 import { requestMove, requestStatus } from './resolve.js';
-
-const LANES = [
-  { id: 'todo', label: 'To do' },
-  { id: 'doing', label: 'In progress' },
-  { id: 'done', label: 'Done' },
-];
 
 /**
  * View state, deliberately not in the store: how you filtered your backlog this
@@ -93,7 +88,10 @@ function header() {
     sprint ? button('Delete', () => {
       if (confirm(`Delete “${sprint.name}”? Its tasks return to the backlog.`)) removeSprint(sprint.id);
     }) : null,
+    columnsButton(),
   ]));
+
+  if (flash.text) head.appendChild(el('div', { class: 'sp-flash', text: flash.text }));
 
   if (!sprint) {
     head.appendChild(el('div', {
@@ -125,6 +123,30 @@ function header() {
   return head;
 }
 
+function columnsButton() {
+  const b = el('button', { class: 'tool', text: 'Columns' });
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const r = b.getBoundingClientRect();
+    openColumnsMenu(r.left, r.bottom + 6);
+  });
+  return b;
+}
+
+/**
+ * A one-line explanation under the header, for refusals that would otherwise be
+ * a silent no-op — dragging a card out of Blocked while the graph still says it
+ * is blocked, for instance.
+ */
+const flash = { text: '', timer: null };
+
+function say(text) {
+  flash.text = text;
+  clearTimeout(flash.timer);
+  flash.timer = setTimeout(() => { flash.text = ''; renderSprints(); }, 4000);
+  renderSprints();
+}
+
 const stat = (value, label) =>
   el('span', {}, [el('b', { text: value }), document.createTextNode(` ${label}`)]);
 
@@ -147,13 +169,18 @@ function lanes() {
     return row;
   }
 
+  row.style.gridTemplateColumns = `repeat(${state.columns.length}, minmax(0, 1fr))`;
+
   const entries = sprintItems(sprint.id);
-  for (const l of LANES) {
-    const inLane = entries.filter(({ item }) => item.status === l.id);
+  for (const column of state.columns) {
+    const inLane = entries.filter(({ item }) => laneOf(item) === column.id);
     const p = progressOf(inLane);
-    const node = el('div', { class: 'sp-lane', dataset: { drop: `lane:${l.id}` } }, [
+    const node = el('div', {
+      class: `sp-lane${column.derived ? ' derived' : ''}`,
+      dataset: { drop: `lane:${column.id}` },
+    }, [
       el('header', {}, [
-        el('h3', { text: l.label }),
+        el('h3', { text: column.label }),
         el('span', {
           class: 'n',
           text: p.points ? `${inLane.length} · ${p.points} pt` : String(inLane.length),
@@ -162,14 +189,20 @@ function lanes() {
       el('div', { class: 'sp-stack' }),
     ]);
     const stack = $('.sp-stack', node);
-    if (!inLane.length) stack.appendChild(el('div', { class: 'sp-empty', text: '—' }));
-    else for (const entry of inLane) stack.appendChild(card(entry));
+    if (!inLane.length) {
+      stack.appendChild(el('div', {
+        class: 'sp-empty',
+        text: column.derived ? 'Nothing waiting on anything.' : '—',
+      }));
+    } else {
+      for (const entry of inLane) stack.appendChild(card(entry, column));
+    }
     row.appendChild(node);
   }
   return row;
 }
 
-function card({ item, bucket }) {
+function card({ item, bucket }, column) {
   const grip = el('div', {
     class: 'sp-grip', style: fillCSS(bucket.color, bucket.pattern, 1), title: 'Drag to move',
   });
@@ -181,9 +214,12 @@ function card({ item, bucket }) {
     dataset: { item: item.id },
   }, [
     grip,
-    el('div', { class: 'sp-text', text: item.title }),
+    el('div', { class: 'sp-body' }, [
+      el('div', { class: 'sp-text', text: item.title }),
+      column && column.derived ? el('div', { class: 'sp-why', text: whyBlocked(item) }) : null,
+    ]),
     el('div', { class: 'sp-meta' }, [
-      blockerDot(blockersFor(item.id)),
+      column && column.derived ? null : blockerDot(blockersFor(item.id)),
       offWindowFlag(item),
       el('span', { class: 'sp-where', text: bucket.name }),
       points,
@@ -206,6 +242,16 @@ function pointsChip(item) {
   });
   chip.addEventListener('click', (e) => { e.stopPropagation(); cyclePoints(item.id); });
   return chip;
+}
+
+/**
+ * Why a card is in Blocked. Being told something is blocked without being told
+ * what by is the least useful thing a board can say.
+ */
+function whyBlocked(item) {
+  const graph = blockersFor(item.id).map((b) => b.item.title);
+  if (graph.length) return `Waiting on ${graph.join(', ')}`;
+  return item.blockedReason || 'Blocked — no reason given';
 }
 
 /** A task dated outside the sprint it is committed to. Shown, never corrected. */
@@ -494,11 +540,17 @@ function bindDragging() {
     if (!d.over) return;
 
     if (d.over === 'backlog') { requestMove(d.item.id, null); return; }
-    const [, status] = d.over.split(':');
-    if (!STATUSES.includes(status) || !state.currentSprint) return;
+    const [, columnId] = d.over.split(':');
+    if (!getColumn(columnId) || !state.currentSprint) return;
+
     /* Shuffling between lanes inside one sprint changes no commitment, so it
        never needs resolving; crossing into the sprint might. */
-    if (d.item.sprintId === state.currentSprint) requestStatus(d.item.id, status);
-    else requestMove(d.item.id, state.currentSprint, status);
+    if (d.item.sprintId !== state.currentSprint) {
+      requestMove(d.item.id, state.currentSprint, columnId === 'blocked' ? 'blocked' : columnId);
+      return;
+    }
+    if (columnId === 'done') { requestStatus(d.item.id, 'done'); return; }
+    const result = setLane(d.item.id, columnId);
+    if (!result.ok && result.reason) say(result.reason);
   });
 }

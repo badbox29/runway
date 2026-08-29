@@ -57,6 +57,8 @@ export function requestStatus(itemId, status) {
   run(planComplete(itemId), status);
 }
 
+export { planComplete };
+
 /** Bring a dropped task back. */
 export function requestRestore(itemId) {
   run(planRestore(itemId), 'todo');

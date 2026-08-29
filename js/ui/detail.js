@@ -15,7 +15,8 @@
 import {
   state, getItem, getBucket, getSprint, updateItem, removeItem, moveItem,
   addComment, removeComment, updateEdge, removeEdge, addEdge, allItems,
-  dateFitsSprint, isDropped, dropItem, POINT_SCALE, STATUSES,
+  dateFitsSprint, isDropped, dropItem, laneOf, setLane, isDerivedBlocked,
+  blockersFor, setBlockedReason, POINT_SCALE,
 } from '../core/store.js';
 import { edgesFor, exclusiveGroup } from '../core/relations.js';
 import { TYPES, typeOf } from '../config/types.js';
@@ -23,8 +24,6 @@ import { requestMove, requestStatus, requestRestore } from './resolve.js';
 import { fillCSS, adapt } from '../util/patterns.js';
 import { longDate } from '../util/dates.js';
 import { el, $, clear } from '../util/dom.js';
-
-const STATUS_LABEL = { todo: 'To do', doing: 'In progress', done: 'Done' };
 
 let root;
 let openId = null;
@@ -115,17 +114,43 @@ function fields(item, bucket) {
     box.appendChild(back);
   }
 
+  /* The segments are the board's columns, so a column someone added shows up
+     here too — one place to change a task's stage, wherever they are. */
+  const lane = laneOf(item);
   const status = el('div', { class: 'dt-seg' });
-  for (const s of STATUSES) {
+  for (const column of state.columns) {
     const b = el('button', {
-      class: `dt-segbtn${item.status === s ? ' on' : ''}`, text: STATUS_LABEL[s],
+      class: `dt-segbtn${lane === column.id ? ' on' : ''}`, text: column.label,
     });
-    /* Finishing can settle an oxygen choice, so it routes through the planner
-       rather than writing the field directly. */
-    b.addEventListener('click', () => requestStatus(item.id, s));
+    b.addEventListener('click', () => {
+      /* Finishing can settle an oxygen choice, so it routes through the planner
+         rather than writing the field directly. */
+      if (column.id === 'done') { requestStatus(item.id, 'done'); return; }
+      const result = setLane(item.id, column.id);
+      if (!result.ok && result.reason) alert(result.reason);
+    });
     status.appendChild(b);
   }
-  box.appendChild(row('Status', status));
+  box.appendChild(row('Column', status));
+
+  if (lane === 'blocked') {
+    const graph = blockersFor(item.id);
+    if (graph.length) {
+      box.appendChild(el('p', {
+        class: 'dt-flag',
+        text: `Blocked by your connections: ${graph.map((b) => b.item.title).join(', ')}. `
+          + 'Finish those and this leaves Blocked on its own.',
+      }));
+    }
+    if (!isDerivedBlocked(item)) {
+      const why = el('input', {
+        class: 'dt-input', type: 'text', placeholder: 'What is this blocked on?',
+        value: item.blockedReason || '',
+      });
+      why.addEventListener('change', () => setBlockedReason(item.id, why.value));
+      box.appendChild(row('Blocked by', why));
+    }
+  }
 
   /* sprint — routed through the planner, not set directly */
   const sprint = el('select', { class: 'dt-input' });

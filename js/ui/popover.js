@@ -10,6 +10,7 @@ import { PALETTE, PATTERNS } from '../config/palette.js';
 import {
   state, addEdge, updateEdge, removeEdge, removeItem, removeBucket,
   commit, emit, labelFor, activeSprint, isDropped, dropItem,
+  addColumn, renameColumn, removeColumn, moveColumn, isFixedColumn,
 } from '../core/store.js';
 import { exclusiveGroup } from '../core/relations.js';
 import { requestStatus, requestMove, requestRestore } from './resolve.js';
@@ -210,6 +211,72 @@ function action(pop, label, onClick, sub) {
   pop.appendChild(b);
   return b;
 }
+
+/* ------------------------------------------------------ columns */
+
+/**
+ * The board columns editor.
+ *
+ * The four defaults can be renamed and reordered but not removed — the rest of
+ * the app reasons about them, and a board with no Done column could not close a
+ * sprint. Their delete controls are absent rather than disabled: a button that
+ * exists only to refuse you is worse than no button.
+ */
+export function openColumnsMenu(x, y) {
+  const pop = popAt(x, y);
+  pop.appendChild(el('div', { class: 'ph', text: 'Board columns' }));
+
+  state.columns.forEach((column, i) => {
+    const name = el('input', { type: 'text', value: column.label, class: 'col-name' });
+    name.addEventListener('change', () => renameColumn(column.id, name.value));
+
+    const up = el('button', { class: 'opt-mini', text: '↑', title: 'Move left' });
+    up.addEventListener('click', () => { moveColumn(column.id, -1); reopen(x, y); });
+    up.disabled = i === 0;
+
+    const down = el('button', { class: 'opt-mini', text: '↓', title: 'Move right' });
+    down.addEventListener('click', () => { moveColumn(column.id, 1); reopen(x, y); });
+    down.disabled = i === state.columns.length - 1;
+
+    const controls = [name, up, down];
+    if (!isFixedColumn(column.id)) {
+      const cut = el('button', { class: 'opt-mini danger', text: '×', title: 'Remove column' });
+      cut.addEventListener('click', () => {
+        if (confirm(`Remove “${column.label}”? Anything in it returns to To do.`)) {
+          removeColumn(column.id);
+          reopen(x, y);
+        }
+      });
+      controls.push(cut);
+    } else {
+      controls.push(el('span', { class: 'opt-lock', text: '·', title: 'Default column — can’t be removed' }));
+    }
+
+    pop.appendChild(el('div', { class: 'col-row' }, controls));
+    if (column.derived) {
+      pop.appendChild(el('div', {
+        class: 'col-note',
+        text: 'Filled automatically from your connections. Drag a card in to add a blocker Runway can’t see.',
+      }));
+    }
+  });
+
+  pop.appendChild(el('div', { class: 'sep' }));
+
+  const draft = el('input', { type: 'text', placeholder: 'New column', class: 'col-name' });
+  const add = el('button', { class: 'opt-mini', text: '+', title: 'Add column' });
+  const submit = () => {
+    if (!draft.value.trim()) return;
+    addColumn(draft.value);
+    reopen(x, y);
+  };
+  add.addEventListener('click', submit);
+  draft.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  pop.appendChild(el('div', { class: 'col-row' }, [draft, add]));
+}
+
+/* Rebuild in place so the list reflects the change without the menu vanishing. */
+const reopen = (x, y) => openColumnsMenu(x, y);
 
 /* ------------------------------------------------------ bucket */
 
