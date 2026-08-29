@@ -57,10 +57,48 @@ lands on the board.
 **Canvas** is the spatial view: buckets placed freely, connections drawn
 between them. **Month** is the calendar.
 
-The three views are one product rather than three apps because of one link: a
-dependency you draw on the canvas shows up as a warning dot on the sprint
-board. If a card's prerequisites aren't done, you see it where you're deciding
-what to work on.
+### How the views hold together
+
+The three views are one product rather than three apps because they share one
+model of time, and each is honest about which part of it they show.
+
+**Three fields, three different claims.** `date` is when a thing happens — a
+fact about the world. `sprintId` is when you promised to deal with it — a fact
+about your plan. `status` is whether it's finished. They can disagree, and when
+they do that's information, not corruption. A task dated three weeks out sitting
+in this fortnight's sprint gets flagged; it is never silently rewritten.
+
+**Committing to a task respects its connections.** Pull something into a sprint
+and Runway walks the graph first. Prerequisites and do-together partners come
+along — transitively, so a chain arrives whole. An either/or partner already in
+the sprint has to leave, because keeping both would commit you to a choice you
+said you hadn't made. Same-slot conflicts are reported. If any of that applies
+you get a dialog listing it, with **Commit all**, **Just this one**, or
+**Cancel**; if none of it applies the task just moves. Sending a task back to
+the backlog runs the mirror check: anything still committed that was counting on
+it gets named, so you can send it back too.
+
+An out-of-window date deliberately does *not* open that dialog. Most backlog
+tasks are dated beyond any two-week horizon, so it would fire on nearly every
+commit and teach you to dismiss the dialog unread — the exact habit that makes
+it useless on the day it has something real to say. It shows as a passive flag
+instead.
+
+**Sprint work is visible everywhere.** On the canvas, tasks in the running
+sprint carry a rail and unfinished prerequisites carry a red dot. On the
+calendar, the sprint is drawn as a band across the days it covers and its tasks
+are ringed, so "this happens on the 12th" stays distinguishable from "I signed
+up to deal with this by the 14th".
+
+**Completing a task takes it off the calendar without touching its date.** The
+date is history; reopen the task and it reappears on the same day. A *Show
+completed* toggle brings them back, dimmed. Committed work with no date has
+nowhere to sit in a month grid, so it's listed beneath it under *Committed, no
+date* — which makes the calendar the place you go to schedule it.
+
+**Connections are editable from either side.** The canvas draws them; the task
+detail panel lists them with a type selector, a direction flip, and a cut, plus
+a picker to add new ones. Same data, two ways in.
 
 ## Themes
 
@@ -85,6 +123,8 @@ between machines.
 | Drag a card grip | move between lanes or to the backlog |
 | **↑** on a backlog row | send it to the current sprint |
 | Click a points chip | cycle the estimate |
+| Click any task, anywhere | open the detail panel |
+| Esc | close the panel or dialog |
 | Drag a bucket header | move the card |
 | Double-click a header | collapse / expand |
 | Right-click a header or row | rename, recolour, retexture, delete |
@@ -126,6 +166,8 @@ css/
   popover.css         menus
   calendar.css        month view
   sprints.css         backlog and sprint board
+  detail.css          task detail panel
+  resolve.css         resolution dialog
 js/
   main.js             boot and orchestration; nothing else touches the toolbar
   config/
@@ -135,10 +177,13 @@ js/
   core/
     store.js          state, typed change events, undo stack, sprints
     geometry.js       rects, anchors, obstacle-aware routing, path building
+    relations.js      what a sprint move implies across the connection graph
     persist.js        localStorage autosave, JSON import/export, migration
     theme.js          scheme and mode, stored per device
   ui/
     sprints.js        backlog and sprint board
+    detail.js         task detail panel — fields, connections, comments
+    resolve.js        the "bring related work along?" dialog
     canvas.js         pan, zoom, canvas growth
     buckets.js        card rendering, header drag, item drag
     edges.js          SVG connection rendering across both layers
@@ -155,6 +200,7 @@ data/
 test/
   geometry.test.mjs   routing and rect math, no dependencies
   store.test.mjs      sprint lifecycle, blockers, board migration
+  relations.test.mjs  sprint moves against the connection graph
   smoke.test.mjs      full boot in jsdom
 ```
 
@@ -193,6 +239,14 @@ fills in mid-saturation. Connections are darker, wire-like hues where dash
 pattern and terminator carry as much signal as colour, drawn with a pale casing
 stroke so they stay legible crossing a patterned header. Without that
 separation a magenta bucket and a magenta line read as the same system.
+
+**A docked panel, not a popover.** Task details used to open as a floating menu
+anchored to the click. It grew until it was taller than the screen, and a
+fixed-position element can't be scrolled back into view — so it opened half off
+the bottom with no way to reach the rest. A panel with its own scroll fixes that
+by construction, and can stay open while you work in the view behind it. The
+popover that remains, for canvas connection and bucket menus, now measures
+itself after insertion and flips above the cursor when there's more room there.
 
 **A task has one completion field.** `status` is `todo | doing | done` — there
 is no separate `done` boolean, because two fields meaning the same thing are
@@ -252,6 +306,9 @@ classic script. That's a test detail only — Runway itself ships unbundled.
 
 - The backlog filter isn't remembered between sessions, on purpose — reopening
   to a list that is quietly missing rows is worse than re-typing a filter.
+- Tasks committed to a *future* sprint don't appear in the sprint view until you
+  select that sprint — they're neither in the backlog nor in the current lanes.
+  Jira solves this with per-sprint sections above the backlog; worth copying.
 - No burndown chart. Progress is a point total, not a history — nothing records
   daily snapshots, so there's no line to draw yet.
 - Sprints have no velocity memory, so a new sprint can't suggest a capacity.
