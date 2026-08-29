@@ -1,6 +1,7 @@
 # Runway
 
-A spatial task board.
+A personal planner with three ways to look at the same tasks: a **sprint
+board**, a **canvas**, and a **month**.
 
 Areas of your life are **buckets** — cards with a colour *and* a texture —
 arranged freely on a canvas that grows as you push things outward. Tasks live
@@ -9,8 +10,9 @@ identity as they land. Buckets and individual tasks can be **connected**, and
 connections carry meaning: depends on, blocks, either/or, conflicts, do
 together, waiting on, informs.
 
-The same board reads as a month calendar, where each day is a stack of textured
-bars rather than a wall of text.
+The same tasks read as a lightweight agile board — backlog, sprints, points,
+progress — and as a month calendar where each day is a stack of textured bars
+rather than a wall of text. Three schemes, each with a light and dark mode.
 
 ## Running it
 
@@ -25,10 +27,51 @@ python3 -m http.server 5173
 
 No build step, no bundler, no runtime dependencies.
 
+## Views
+
+**Sprints** (the landing view) is a light personal agile tracker: a backlog on
+the left, and to-do / in-progress / done lanes for the current sprint. Drag a
+card by its textured grip to move it between lanes or back to the backlog.
+Click the points chip to estimate. Create a sprint, start it, and close it —
+closing returns unfinished work to the backlog rather than dragging it along
+silently, because carrying work over invisibly is how a sprint stops meaning
+anything.
+
+A task has a bucket *and* a sprint. The bucket is which part of your life it
+belongs to and doesn't change when the fortnight does; the sprint is a time
+box. They're orthogonal, so a card keeps its colour and texture wherever it
+lands on the board.
+
+**Canvas** is the spatial view: buckets placed freely, connections drawn
+between them. **Month** is the calendar.
+
+The three views are one product rather than three apps because of one link: a
+dependency you draw on the canvas shows up as a warning dot on the sprint
+board. If a card's prerequisites aren't done, you see it where you're deciding
+what to work on.
+
+## Themes
+
+Three schemes — **Paper** (cool slate, quiet and printerly), **Clay** (warm
+stone, low contrast for long sessions), and **Signal** (high contrast for a
+dense board) — each with a light and dark mode. Mode follows your OS until you
+pick one explicitly.
+
+A scheme themes the *paper*: ground, surface, ink, rules. It deliberately does
+not touch bucket or connection colours, because those are identity — a bucket
+is magenta because you made it magenta, and it shouldn't change meaning when
+you dim the lights. Dark mode instead lifts those stored hues toward the light
+at render time, so a board stays portable between modes, between schemes, and
+between machines.
+
 ## Controls
 
 | | |
 |---|---|
+| `s` / `b` / `c` | sprints / board / calendar |
+| `d` | toggle dark mode |
+| Drag a card grip | move between lanes or to the backlog |
+| Click a points chip | cycle the estimate |
 | Drag a bucket header | move the card |
 | Double-click a header | collapse / expand |
 | Right-click a header or row | rename, recolour, retexture, delete |
@@ -39,7 +82,7 @@ No build step, no bundler, no runtime dependencies.
 | Drag empty canvas | pan |
 | ⌘/Ctrl + scroll | zoom |
 | ⌘/Ctrl + Z | undo |
-| `c` / `b` | switch to calendar / board |
+| Reset button, or `?reset` | reload the demo board |
 
 ## Connection types
 
@@ -62,23 +105,27 @@ curve at half opacity under the cards instead of an orthogonal line over them.
 ```
 index.html            markup and layer scaffolding only
 css/
-  tokens.css          every colour and metric in the app
+  tokens.css          three schemes × two modes, plus shared metrics
   base.css            reset and shared primitives
   chrome.css          toolbar, legend, hint
   canvas.css          scroller, world, SVG layers
   bucket.css          cards, rows, knobs
   popover.css         menus
   calendar.css        month view
+  sprints.css         backlog and sprint board
 js/
   main.js             boot and orchestration; nothing else touches the toolbar
   config/
     types.js          connection types — colour, dash, terminator, direction
     palette.js        bucket palette, patterns, card metrics
+    schemes.js        colour scheme registry
   core/
-    store.js          state, typed change events, undo stack
+    store.js          state, typed change events, undo stack, sprints
     geometry.js       rects, anchors, obstacle-aware routing, path building
-    persist.js        localStorage autosave, JSON import/export
+    persist.js        localStorage autosave, JSON import/export, migration
+    theme.js          scheme and mode, stored per device
   ui/
+    sprints.js        backlog and sprint board
     canvas.js         pan, zoom, canvas growth
     buckets.js        card rendering, header drag, item drag
     edges.js          SVG connection rendering across both layers
@@ -88,10 +135,14 @@ js/
     legend.js         connection key
   util/
     dom.js            element helpers
-    patterns.js       pattern fill generator
+    patterns.js       pattern fills and dark-mode colour adaptation
     dates.js          ISO date handling and formatting
 data/
   seed.js             starting board, same shape as an export
+test/
+  geometry.test.mjs   routing and rect math, no dependencies
+  store.test.mjs      sprint lifecycle, blockers, board migration
+  smoke.test.mjs      full boot in jsdom
 ```
 
 ## How it works
@@ -130,14 +181,34 @@ pattern and terminator carry as much signal as colour, drawn with a pale casing
 stroke so they stay legible crossing a patterned header. Without that
 separation a magenta bucket and a magenta line read as the same system.
 
+**A task has one completion field.** `status` is `todo | doing | done` — there
+is no separate `done` boolean, because two fields meaning the same thing are
+two fields that can disagree. Boards saved before sprints existed are migrated
+on load, so an upgrade never costs you a board.
+
 **Change events are typed.** `store.js` emits `structure`, `geometry`, `edges`,
 or `view`, and `main.js` decides what to redraw. Moving a card doesn't rebuild
 forty DOM nodes.
 
 ## Data
 
-The board autosaves to `localStorage` under `runway.board.v1` on a 500ms
-debounce. **Export** writes a JSON file in the same shape as `data/seed.js`, so
+The board autosaves to `localStorage` under `runway.board.v2` on a 500ms
+debounce; a `v1` board is read and migrated automatically.
+
+**A saved board wins over the bundled demo**, which is the point of autosave —
+but it means editing `data/seed.js` has no visible effect for anyone who has
+opened Runway before. So a board records where it came from: `fromSeed` is true
+until the first edit, and `seedVersion` stamps which generation of the demo it
+is. On boot, an *untouched* demo from an older generation is replaced; a board
+anyone has actually worked on never is. Bump `seedVersion` in `data/seed.js`
+whenever you change the demo.
+
+Boards saved before this mechanism existed carry no stamp, so they're treated
+as edited and kept. To force the demo back: the **Reset** button, or load
+`index.html?reset`. Theme choice is
+stored separately under `runway.theme.v1`, because a theme belongs to a device
+and a pair of eyes, not to the data — importing someone else's board shouldn't
+repaint your screen. **Export** writes a JSON file in the same shape as `data/seed.js`, so
 a board can be committed to version control or hand-edited in a text editor.
 **Import** replaces the current board.
 
@@ -149,7 +220,7 @@ empty, or drop in an export.
 ## Tests
 
 ```bash
-npm test                              # geometry and routing, no dependencies
+npm test                              # geometry, routing, and store — no dependencies
 npm install && npm run test:smoke     # boots the app in jsdom
 ```
 
@@ -166,8 +237,11 @@ classic script. That's a test detail only — Runway itself ships unbundled.
 
 ## Known gaps
 
+- No burndown chart. Progress is a point total, not a history — nothing records
+  daily snapshots, so there's no line to draw yet.
+- Sprints have no velocity memory, so a new sprint can't suggest a capacity.
 - Tasks can't be dragged directly onto a calendar day yet; dates are set from
-  the item menu.
+  the task menu.
 - Connections to items inside a *collapsed* bucket fold to the bucket's own
   anchor rather than remembering where the row was.
 - Undo covers structure and connections, not zoom or scroll position.
