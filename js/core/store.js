@@ -19,7 +19,34 @@
 
 const listeners = new Set();
 
-/** The workflow lanes. `dropped` is deliberately not one of them. */
+/**
+ * Board columns.
+ *
+ * The four defaults are fixed: they can be renamed and reordered but not
+ * deleted, because the rest of the app reasons about them. `done` decides sprint
+ * progress and what survives closing a sprint; `todo` is where returned and
+ * restored work lands. A board with no such column would have nowhere to put
+ * things.
+ *
+ * `blocked` is the odd one, and deliberately so — see laneOf(). Runway already
+ * knows what is blocked, from the connection graph. Making Blocked a lane you
+ * drag into would create a second, contradictory answer to the same question:
+ * a card parked in Blocked with every prerequisite finished, or a card in To do
+ * with a red dot on it. That is the `done`-boolean-beside-`status` mistake in a
+ * new costume. So the column is computed first and manual second: a task with
+ * unmet prerequisites appears there on its own, and dragging a card in records
+ * a block that the graph doesn't know about.
+ */
+export const DEFAULT_COLUMNS = [
+  { id: 'todo', label: 'To do', fixed: true },
+  { id: 'blocked', label: 'Blocked', fixed: true, derived: true },
+  { id: 'doing', label: 'In progress', fixed: true },
+  { id: 'done', label: 'Done', fixed: true },
+];
+
+export const FIXED_COLUMN_IDS = DEFAULT_COLUMNS.map((c) => c.id);
+
+/** Kept for the parts of the app that only care about the workflow statuses. */
 export const STATUSES = ['todo', 'doing', 'done'];
 
 /**
@@ -43,6 +70,7 @@ export const state = {
   buckets: [],
   edges: [],
   sprints: [],
+  columns: DEFAULT_COLUMNS.map((c) => ({ ...c })),
   currentSprint: null,
   /* True while the board is still the untouched demo. The first edit clears
      it, which is what lets a newer demo replace an older one without ever
@@ -76,8 +104,9 @@ const undoStack = [];
 const MAX_UNDO = 60;
 let batching = false;
 
-const snapshot = () =>
-  JSON.stringify({ buckets: state.buckets, edges: state.edges, sprints: state.sprints });
+const snapshot = () => JSON.stringify({
+  buckets: state.buckets, edges: state.edges, sprints: state.sprints, columns: state.columns,
+});
 
 /**
  * Call before a mutation you want to be undoable.
@@ -114,6 +143,8 @@ export function undo() {
   state.buckets = data.buckets;
   state.edges = data.edges;
   state.sprints = data.sprints || [];
+  if (data.columns) state.columns = data.columns;
+  state.columns = data.columns || DEFAULT_COLUMNS.map((c) => ({ ...c }));
   state.selectedEdge = null;
   emit('structure');
   return true;
@@ -351,6 +382,120 @@ export function restoreItem(id) {
   emit('structure');
 }
 
+/* --------------------------------------------------------- columns */
+
+export const getColumn = (id) => state.columns.find((c) => c.id === id);
+export const isFixedColumn = (id) => FIXED_COLUMN_IDS.includes(id);
+
+/**
+ * Which column a task belongs in.
+ *
+ * Blocked is derived, not stored: a task with unfinished prerequisites belongs
+ * there whether or not anyone dragged it. The manual case — `status: 'blocked'`
+ * — exists for the blockers Runway cannot see, the ones that live in someone
+ * else's inbox. Derived blocking only applies to work not yet started; if you
+ * are actively on something, you are not blocked on it, whatever the graph says.
+ */
+export function laneOf(item) {
+  if (item.status === DROPPED) return null;
+  if (item.status === 'done') return 'done';
+  if (item.status === 'blocked') return 'blocked';
+  if (item.status === 'todo' && blockersFor(item.id).length) return 'blocked';
+  return getColumn(item.status) ? item.status : 'todo';
+}
+
+/** True when the graph, not a person, is putting this task in Blocked. */
+export const isDerivedBlocked = (item) =>
+  item.status === 'todo' && blockersFor(item.id).length > 0;
+
+export function addColumn(label) {
+  const name = String(label || '').trim();
+  if (!name) return null;
+  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'column';
+  let id = base;
+  let n = 2;
+  while (getColumn(id)) id = `${base}-${n++}`;
+  commit();
+  const column = { id, label: name, fixed: false };
+  /* New columns land before Done, which is almost always where a new stage in
+     someone's process actually goes. */
+  const at = state.columns.findIndex((c) => c.id === 'done');
+  if (at < 0) state.columns.push(column);
+  else state.columns.splice(at, 0, column);
+  emit('structure');
+  return column;
+}
+
+export function renameColumn(id, label) {
+  const name = String(label || '').trim();
+  const column = getColumn(id);
+  if (!name || !column) return;
+  commit();
+  column.label = name;
+  emit('structure');
+}
+
+/**
+ * Remove a column. The fixed four are refused — the rest of the app reasons
+ * about them, and a board with no Done column could not close a sprint.
+ * Anything sitting in a removed column returns to To do rather than vanishing.
+ */
+export function removeColumn(id) {
+  if (isFixedColumn(id) || !getColumn(id)) return false;
+  commit();
+  state.columns = state.columns.filter((c) => c.id !== id);
+  for (const b of state.buckets) {
+    for (const item of b.items) if (item.status === id) item.status = 'todo';
+  }
+  emit('structure');
+  return true;
+}
+
+export function moveColumn(id, delta) {
+  const at = state.columns.findIndex((c) => c.id === id);
+  const to = at + delta;
+  if (at < 0 || to < 0 || to >= state.columns.length) return;
+  commit();
+  const [column] = state.columns.splice(at, 1);
+  state.columns.splice(to, 0, column);
+  emit('structure');
+}
+
+/**
+ * Put a task in a column.
+ *
+ * Returns a refusal rather than silently doing nothing when the graph disagrees:
+ * you cannot drag a task out of Blocked while it still has unfinished
+ * prerequisites, because the column is computed and it would simply snap back.
+ * The way out of derived Blocked is to finish the thing it is waiting on.
+ */
+export function setLane(itemId, columnId) {
+  const found = getItem(itemId);
+  if (!found || !getColumn(columnId)) return { ok: false };
+  const { item } = found;
+
+  if (columnId !== 'blocked' && columnId !== 'done' && isDerivedBlocked(item)) {
+    const waiting = blockersFor(itemId).map((b) => b.item.title);
+    return { ok: false, reason: `Still waiting on ${waiting.join(', ')}.` };
+  }
+  commit();
+  item.status = columnId;
+  if (columnId !== 'blocked') delete item.blockedReason;
+  emit('structure');
+  return { ok: true };
+}
+
+export function setBlockedReason(itemId, reason) {
+  commit();
+  const found = getItem(itemId);
+  if (found) {
+    const text = String(reason || '').trim();
+    if (text) found.item.blockedReason = text;
+    else delete found.item.blockedReason;
+  }
+  emit('structure');
+}
+
 export function cyclePoints(id) {
   const found = getItem(id);
   if (!found) return;
@@ -485,10 +630,21 @@ function normalize(data) {
       };
     }),
   }));
+  /* A board saved before columns existed gets the defaults. One saved with a
+     partial set gets the missing fixed columns appended, so removing them by
+     hand-editing an export cannot leave the app without a Done lane. */
+  const saved = Array.isArray(data.columns) && data.columns.length
+    ? data.columns.map((c) => ({ ...c, fixed: FIXED_COLUMN_IDS.includes(c.id) }))
+    : DEFAULT_COLUMNS.map((c) => ({ ...c }));
+  for (const fixed of DEFAULT_COLUMNS) {
+    if (!saved.some((c) => c.id === fixed.id)) saved.push({ ...fixed });
+  }
+
   return {
     buckets,
     edges: data.edges || [],
     sprints: data.sprints || [],
+    columns: saved,
     world: data.world || state.world,
     currentSprint: data.currentSprint || null,
   };
@@ -504,6 +660,7 @@ export function load(data, origin = {}) {
   state.buckets = clean.buckets;
   state.edges = clean.edges;
   state.sprints = clean.sprints;
+  state.columns = clean.columns;
   state.world = clean.world;
   state.currentSprint = clean.currentSprint
     || state.sprints.find((s) => s.status === 'active')?.id
@@ -522,6 +679,7 @@ export const serialize = () => ({
   buckets: state.buckets,
   edges: state.edges,
   sprints: state.sprints,
+  columns: state.columns,
   currentSprint: state.currentSprint,
   fromSeed: state.fromSeed,
   seedVersion: state.seedVersion,
