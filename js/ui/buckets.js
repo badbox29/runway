@@ -7,14 +7,16 @@
  */
 import {
   state, commit, emit, moveItem, addItem, updateItem, removeItem, removeBucket,
+  isCommitted, activeSprint, blockersFor,
 } from '../core/store.js';
+import { openDetail } from './detail.js';
 import { fillCSS } from '../util/patterns.js';
 import { shortDate } from '../util/dates.js';
 import { el, $, $$, clear } from '../util/dom.js';
 import { toWorld, growToFit } from './canvas.js';
 import { renderEdges } from './edges.js';
 import { startWire } from './wiring.js';
-import { openBucketMenu, openItemMenu } from './popover.js';
+import { openBucketMenu } from './popover.js';
 
 let layer;
 
@@ -81,11 +83,20 @@ function rowFor(b, item) {
   const knob = el('div', { class: 'knob', title: 'Drag to connect' });
   knob.addEventListener('pointerdown', (e) => startWire(e, { kind: 'item', id: item.id }));
 
+  /* A task committed to the running sprint is marked here too. The canvas is
+     where you decide what depends on what; knowing which of those you have
+     already signed up for this fortnight is the missing half of that. */
+  const committed = isCommitted(item);
+  const blocked = blockersFor(item.id).length > 0;
+
   const row = el('div', {
-    class: `row${item.status === 'done' ? ' done' : ''}`,
+    class: `row${item.status === 'done' ? ' done' : ''}${committed ? ' committed' : ''}`,
     dataset: { node: `item:${item.id}`, id: item.id },
+    title: committed ? `In ${activeSprint().name}` : '',
   }, [
+    committed ? el('span', { class: 'rail', title: `In ${activeSprint().name}` }) : null,
     el('div', { class: 'txt', text: item.title }),
+    blocked ? el('span', { class: 'row-block', title: 'Has unfinished prerequisites' }) : null,
     el('div', { class: 'when', text: shortDate(item.date) }),
     knob,
   ]);
@@ -96,7 +107,7 @@ function rowFor(b, item) {
   });
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    openItemMenu(e.clientX, e.clientY, item, b);
+    openDetail(item.id);
   });
   return row;
 }
@@ -161,11 +172,7 @@ function bindDragging() {
 
     d.row.style.opacity = '';
     if (d.moved && d.target) moveItem(d.item.id, d.target);
-    else if (!d.moved) {
-      commit();
-      d.item.status = d.item.status === 'done' ? 'todo' : 'done';
-      emit('structure');
-    }
+    else if (!d.moved) openDetail(d.item.id);
   });
 }
 

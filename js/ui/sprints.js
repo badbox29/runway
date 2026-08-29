@@ -20,13 +20,14 @@
  */
 import {
   state, backlogItems, sprintItems, getSprint, blockersFor, progressOf, daysUntil,
-  assignToSprint, addSprint, startSprint, completeSprint, removeSprint,
-  cyclePoints, addItem, emit, STATUSES,
+  addSprint, startSprint, completeSprint, removeSprint, updateItem,
+  cyclePoints, addItem, emit, dateFitsSprint, STATUSES,
 } from '../core/store.js';
 import { fillCSS } from '../util/patterns.js';
 import { longDate, shortDate } from '../util/dates.js';
 import { el, $, $$, clear } from '../util/dom.js';
-import { openItemMenu } from './popover.js';
+import { openDetail } from './detail.js';
+import { requestMove } from './resolve.js';
 
 const LANES = [
   { id: 'todo', label: 'To do' },
@@ -183,6 +184,7 @@ function card({ item, bucket }) {
     el('div', { class: 'sp-text', text: item.title }),
     el('div', { class: 'sp-meta' }, [
       blockerDot(blockersFor(item.id)),
+      offWindowFlag(item),
       el('span', { class: 'sp-where', text: bucket.name }),
       points,
     ]),
@@ -191,7 +193,7 @@ function card({ item, bucket }) {
   grip.addEventListener('pointerdown', (e) => startDrag(e, item, node));
   node.addEventListener('click', (e) => {
     if (e.target === points || e.target === grip) return;
-    openItemMenu(e.clientX, e.clientY, item, bucket);
+    openDetail(item.id);
   });
   return node;
 }
@@ -204,6 +206,17 @@ function pointsChip(item) {
   });
   chip.addEventListener('click', (e) => { e.stopPropagation(); cyclePoints(item.id); });
   return chip;
+}
+
+/** A task dated outside the sprint it is committed to. Shown, never corrected. */
+function offWindowFlag(item) {
+  const sprint = getSprint(item.sprintId);
+  if (!sprint || dateFitsSprint(item, sprint)) return null;
+  return el('span', {
+    class: 'sp-offwindow',
+    text: '!',
+    title: `Dated ${item.date}, outside ${sprint.name}`,
+  });
 }
 
 const blockerDot = (blockers) => (blockers.length
@@ -337,7 +350,7 @@ function row({ item, bucket }) {
   if (send) {
     send.addEventListener('click', (e) => {
       e.stopPropagation();
-      assignToSprint(item.id, sprint.id, 'todo');
+      requestMove(item.id, sprint.id, 'todo');
     });
   }
 
@@ -360,7 +373,7 @@ function row({ item, bucket }) {
   grip.addEventListener('pointerdown', (e) => startDrag(e, item, node));
   node.addEventListener('click', (e) => {
     if (e.target === points || e.target === grip || e.target === send) return;
-    openItemMenu(e.clientX, e.clientY, item, bucket);
+    openDetail(item.id);
   });
   return node;
 }
@@ -469,10 +482,12 @@ function bindDragging() {
     $$('.hot').forEach((n) => n.classList.remove('hot'));
     if (!d.over) return;
 
-    if (d.over === 'backlog') { assignToSprint(d.item.id, null); return; }
+    if (d.over === 'backlog') { requestMove(d.item.id, null); return; }
     const [, status] = d.over.split(':');
-    if (STATUSES.includes(status) && state.currentSprint) {
-      assignToSprint(d.item.id, state.currentSprint, status);
-    }
+    if (!STATUSES.includes(status) || !state.currentSprint) return;
+    /* Shuffling between lanes inside one sprint changes no commitment, so it
+       never needs resolving; crossing into the sprint might. */
+    if (d.item.sprintId === state.currentSprint) updateItem(d.item.id, { status });
+    else requestMove(d.item.id, state.currentSprint, status);
   });
 }

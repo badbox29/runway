@@ -20,16 +20,52 @@ export function closeMenus() {
   document.querySelectorAll('.pop').forEach((n) => n.remove());
 }
 
-function popAt(x, y, width = 216) {
+/**
+ * Place a popover so it is fully on screen.
+ *
+ * The old version clamped against a guessed height, which meant a menu taller
+ * than the guess opened past the bottom edge with no way to reach the rest of
+ * it — the window scrolls, a fixed-position element does not. This measures the
+ * menu after it is in the document, flips it above the cursor when there is more
+ * room there, and caps its height so a long menu scrolls inside itself.
+ */
+function popAt(x, y) {
   closeMenus();
-  const pop = el('div', {
-    class: 'pop',
-    style: `left:${Math.min(x, window.innerWidth - width - 8)}px;top:${Math.min(y, window.innerHeight - 340)}px`,
-  });
+  const pop = el('div', { class: 'pop', style: 'left:-9999px;top:-9999px' });
   pop.addEventListener('pointerdown', (e) => e.stopPropagation());
   document.body.appendChild(pop);
+  /* Position on the next frame, once the caller has filled it in. */
+  requestAnimationFrame(() => place(pop, x, y));
+  pop.dataset.anchorX = x;
+  pop.dataset.anchorY = y;
   return pop;
 }
+
+const MARGIN = 10;
+
+function place(pop, x, y) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const rect = pop.getBoundingClientRect();
+
+  const below = vh - y - MARGIN;
+  const above = y - MARGIN;
+  let top;
+  if (rect.height <= below) top = y;
+  else if (rect.height <= above) top = y - rect.height;
+  else {
+    /* Taller than either side: pin it to the roomier half and let it scroll. */
+    pop.style.maxHeight = `${Math.max(below, above) - MARGIN}px`;
+    top = below >= above ? y : MARGIN;
+  }
+  const left = Math.max(MARGIN, Math.min(x, vw - rect.width - MARGIN));
+  pop.style.left = `${left}px`;
+  pop.style.top = `${Math.max(MARGIN, top)}px`;
+}
+
+/* A fixed popover cannot follow a scrolling page, so it closes instead of
+   drifting away from whatever it was describing. */
+window.addEventListener('resize', closeMenus);
 
 function typeOption(key, active, onPick) {
   const t = TYPES[key];
@@ -105,88 +141,6 @@ export function openEdgeMenu(x, y, id) {
 }
 
 /* -------------------------------------------------------- item */
-
-export function openItemMenu(x, y, item) {
-  const pop = popAt(x, y);
-  pop.appendChild(el('div', { class: 'ph', text: 'Task' }));
-
-  const title = el('input', { type: 'text', value: item.title });
-  title.addEventListener('change', () => updateItem(item.id, { title: title.value.trim() || item.title }));
-  pop.appendChild(title);
-
-  const date = el('input', { type: 'date', value: item.date || '' });
-  date.addEventListener('change', () => updateItem(item.id, { date: date.value || null }));
-  pop.appendChild(date);
-
-  /* Estimate. Null is a real state — an unestimated task is not a zero-point
-     task, and collapsing the two hides work from the burn figures. */
-  pop.appendChild(el('div', { class: 'ph', text: 'Points' }));
-  const points = el('div', { style: 'display:flex;gap:4px;padding:0 4px 8px;flex-wrap:wrap' });
-  for (const value of [null, ...POINT_SCALE]) {
-    const on = item.points === value;
-    const chip = el('button', {
-      class: `opt${on ? ' on' : ''}`,
-      style: 'width:auto;justify-content:center;min-width:30px;padding:5px 8px;'
-        + `border:1px solid ${on ? 'var(--ink)' : 'var(--line)'};font-weight:700`,
-      text: value === null ? '–' : String(value),
-    });
-    chip.addEventListener('click', () => { updateItem(item.id, { points: value }); closeMenus(); });
-    points.appendChild(chip);
-  }
-  pop.appendChild(points);
-
-  /* Sprint assignment. Bucket and sprint are orthogonal: this never moves the
-     task out of the part of your life it belongs to. */
-  pop.appendChild(el('div', { class: 'ph', text: 'Sprint' }));
-  const backlog = el('button', {
-    class: `opt${!item.sprintId ? ' on' : ''}`,
-    text: 'Backlog',
-  });
-  backlog.addEventListener('click', () => { assignToSprint(item.id, null); closeMenus(); });
-  pop.appendChild(backlog);
-  for (const sprint of state.sprints) {
-    const on = item.sprintId === sprint.id;
-    const opt = el('button', { class: `opt${on ? ' on' : ''}` }, [
-      el('span', {}, [
-        document.createTextNode(sprint.name),
-        el('span', { class: 'sub', text: sprint.status }),
-      ]),
-    ]);
-    opt.addEventListener('click', () => { assignToSprint(item.id, sprint.id, 'todo'); closeMenus(); });
-    pop.appendChild(opt);
-  }
-
-  pop.appendChild(el('div', { class: 'sep' }));
-
-  for (const status of STATUSES) {
-    const on = item.status === status;
-    const label = { todo: 'To do', doing: 'In progress', done: 'Done' }[status];
-    const opt = el('button', { class: `opt${on ? ' on' : ''}`, text: label });
-    opt.addEventListener('click', () => { updateItem(item.id, { status }); closeMenus(); });
-    pop.appendChild(opt);
-  }
-
-  const blockers = blockersFor(item.id);
-  if (blockers.length) {
-    pop.appendChild(el('div', { class: 'sep' }));
-    pop.appendChild(el('div', { class: 'ph', text: 'Waiting on' }));
-    for (const b of blockers) {
-      pop.appendChild(el('div', {
-        class: 'opt',
-        style: 'cursor:default',
-      }, [el('span', {}, [
-        document.createTextNode(b.item.title),
-        el('span', { class: 'sub', text: `${b.type} · ${b.bucket.name}` }),
-      ])]));
-    }
-  }
-
-  pop.appendChild(el('div', { class: 'sep' }));
-
-  const del = el('button', { class: 'opt danger', text: 'Delete task' });
-  del.addEventListener('click', () => { removeItem(item.id); closeMenus(); });
-  pop.appendChild(del);
-}
 
 /* ------------------------------------------------------ bucket */
 
