@@ -20,6 +20,8 @@ import { initWiring } from './ui/wiring.js';
 import { initCalendar, renderCalendar } from './ui/calendar.js';
 import { initSprints, renderSprints } from './ui/sprints.js';
 import { renderLegend } from './ui/legend.js';
+import { initDetail, renderDetail, closeDetail, isDetailOpen } from './ui/detail.js';
+import { initResolve } from './ui/resolve.js';
 import { openTypeMenu, openEdgeMenu, closeMenus } from './ui/popover.js';
 import { $, $$, el } from './util/dom.js';
 
@@ -32,6 +34,8 @@ initEdges(handleEdgeClick);
 initWiring(handleWireComplete);
 initCalendar();
 initSprints();
+initDetail();
+initResolve();
 
 bootBoard();
 startAutosave();
@@ -99,12 +103,13 @@ function renderAll() {
   renderEdges();
   renderCalendar();
   renderSprints();
+  renderDetail();
 }
 
 subscribe((kind) => {
-  if (kind === 'structure') { renderBuckets(); renderEdges(); renderCalendar(); renderSprints(); }
+  if (kind === 'structure') { renderBuckets(); renderEdges(); renderCalendar(); renderSprints(); renderDetail(); }
   else if (kind === 'geometry') renderEdges();
-  else if (kind === 'edges') { renderEdges(); renderSprints(); }
+  else if (kind === 'edges') { renderEdges(); renderSprints(); renderBuckets(); renderDetail(); }
   else if (kind === 'view') { renderCalendar(); renderSprints(); }
 });
 
@@ -233,7 +238,13 @@ window.addEventListener('keydown', (e) => {
     undo();
     return;
   }
-  if (e.key === 'Escape') { closeMenus(); state.selectedEdge = null; renderEdges(); }
+  if (e.key === 'Escape') {
+    if (!$('#modal').hidden) return;      /* the dialog handles its own Escape */
+    if (isDetailOpen()) { closeDetail(); return; }
+    closeMenus();
+    state.selectedEdge = null;
+    renderEdges();
+  }
   if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedEdge) {
     e.preventDefault();
     removeEdge(state.selectedEdge);
