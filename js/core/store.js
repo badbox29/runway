@@ -19,7 +19,23 @@
 
 const listeners = new Set();
 
+/** The workflow lanes. `dropped` is deliberately not one of them. */
 export const STATUSES = ['todo', 'doing', 'done'];
+
+/**
+ * Dropped: decided against, kept on record.
+ *
+ * An either/or is a choice about where finite attention goes, and committing to
+ * one arm is how the choice gets made. The arms not taken need a state that is
+ * neither `done` (a lie), nor deleted (destroys the task and the connection that
+ * explains it), nor left in the backlog (where it resurfaces in three months as
+ * mystery work nobody can account for). Dropped keeps the task, keeps the edge,
+ * stays out of the way, and stays reversible.
+ */
+export const DROPPED = 'dropped';
+
+export const isDropped = (item) => item.status === DROPPED;
+export const isLive = (item) => item.status !== DROPPED;
 export const POINT_SCALE = [1, 2, 3, 5, 8];
 export const PREREQ_TYPES = ['depends', 'blocks', 'waiting'];
 
@@ -147,11 +163,15 @@ export function dateFitsSprint(item, sprint) {
   return item.date >= sprint.start && item.date <= sprint.end;
 }
 
-/** Everything not committed to a sprint. */
-export const backlogItems = () => allItems().filter(({ item }) => !item.sprintId);
+/** Everything live and not committed to a sprint. */
+export const backlogItems = () =>
+  allItems().filter(({ item }) => !item.sprintId && isLive(item));
+
+/** Dropped work, for the times you want to look at what you decided against. */
+export const droppedItems = () => allItems().filter(({ item }) => isDropped(item));
 
 export const sprintItems = (sprintId) =>
-  allItems().filter(({ item }) => item.sprintId === sprintId);
+  allItems().filter(({ item }) => item.sprintId === sprintId && isLive(item));
 
 export function labelFor(ep) {
   if (ep.kind === 'bucket') {
@@ -304,6 +324,33 @@ export function moveItem(id, toBucketId, index = -1) {
   emit('structure');
 }
 
+/**
+ * Decide against a task. It leaves the backlog and any sprint, and keeps
+ * everything else — title, date, points, comments, connections — so the record
+ * of what you chose and what you passed over stays intact.
+ */
+export function dropItem(id) {
+  commit();
+  const found = getItem(id);
+  if (found) {
+    found.item.status = DROPPED;
+    found.item.droppedAt = new Date().toISOString();
+    found.item.sprintId = null;
+  }
+  emit('structure');
+}
+
+/** Bring a dropped task back as unstarted work. */
+export function restoreItem(id) {
+  commit();
+  const found = getItem(id);
+  if (found && isDropped(found.item)) {
+    found.item.status = 'todo';
+    delete found.item.droppedAt;
+  }
+  emit('structure');
+}
+
 export function cyclePoints(id) {
   const found = getItem(id);
   if (!found) return;
@@ -352,7 +399,11 @@ export function completeSprint(id) {
   if (s) s.status = 'done';
   let returned = 0;
   for (const { item } of sprintItems(id)) {
-    if (item.status !== 'done') { item.sprintId = null; item.status = 'todo'; returned += 1; }
+    if (item.status !== 'done' && isLive(item)) {
+      item.sprintId = null;
+      item.status = 'todo';
+      returned += 1;
+    }
   }
   emit('structure');
   return returned;
