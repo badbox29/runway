@@ -175,3 +175,20 @@
 .sp-row.dropped .sp-text{text-decoration:line-through;color:var(--muted);opacity:.65;}
 .sp-row.dropped{background:repeating-linear-gradient(
   135deg, transparent 0 6px, var(--wash) 6px 12px);}
+
+/* Blocked is computed, so it reads as a state of the board rather than a
+   destination you chose — hatched edge, quieter surface. */
+.sp-lane.derived > header{background:repeating-linear-gradient(
+  135deg, transparent 0 5px, var(--wash) 5px 10px);}
+.sp-lane.derived h3{color:var(--danger);}
+
+.sp-body{flex:1;min-width:0;}
+.sp-why{
+  font-size:10px;color:var(--muted);line-height:1.35;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+.sp-flash{
+  margin-top:8px;padding:6px 9px;font-size:11.5px;
+  background:var(--wash);border-left:3px solid var(--danger);border-radius:2px;
+}
