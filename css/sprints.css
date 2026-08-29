@@ -154,6 +154,11 @@
 }
 .sp-send:hover{color:var(--ink);border-color:var(--ink);}
 
+.sp-offwindow{
+  width:13px;height:13px;flex:0 0 13px;border-radius:50%;
+  border:1px solid var(--danger);color:var(--danger);
+  font-size:9px;font-weight:700;line-height:11px;text-align:center;cursor:help;
+}
 .sp-block{
   width:8px;height:8px;flex:0 0 8px;border-radius:50%;
   background:var(--danger);cursor:help;

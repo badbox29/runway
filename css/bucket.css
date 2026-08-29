@@ -29,6 +29,18 @@
 .row.hot{background:var(--wash);}
 .row.done .txt{text-decoration:line-through;color:var(--muted);}
 
+/* Committed to the running sprint. A rail rather than a colour change: the row
+   already carries a bucket colour, and a second hue there would compete with it. */
+.row.committed{background:var(--wash);}
+.row .rail{
+  width:3px;height:15px;flex:0 0 3px;border-radius:1px;
+  background:var(--ink);margin-left:-4px;
+}
+.row-block{
+  width:6px;height:6px;flex:0 0 6px;border-radius:50%;
+  background:var(--danger);
+}
+
 .knob{
   width:11px;height:11px;flex:0 0 11px;border-radius:50%;
   border:1.5px solid var(--muted);background:var(--surface);
