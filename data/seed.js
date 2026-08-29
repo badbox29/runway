@@ -191,6 +191,11 @@ const project = bucket('Side project', '#0F6E6E', 'diagonal', [
   task('Launch', 28, { points: 5, ref: 'launch' }),
   task('Rewrite the landing page', null, { points: 8, ref: 'landing' }),
   task('Commission a logo', null, { points: 2, ref: 'logo' }),
+  task('Buy an off-the-shelf template', null, { points: 1, ref: 'template' }),
+  task('Hire a contractor for the rebuild', null, {
+    points: 8, status: 'dropped', ref: 'contractor',
+    notes: 'Quoted well over budget. Kept for the quote and the contact.',
+  }),
 ]);
 
 const social = bucket('Social', '#7A5C12', 'dots', [
@@ -242,11 +247,15 @@ const edges = [
   link('waiting', at('launch-post'), at('jo')),
   link('waiting', at('ptc'), at('slip')),
 
-  /* either / or — pick one */
-  link('either', at('hike'), at('matinee')),
+  /* either / or — an oxygen choice. Only one of these is getting done, and
+     committing to one is how that gets decided. Three arms here rather than
+     two, because exclusivity is transitive and the group is what matters. */
   link('either', at('logo'), at('landing')),
+  link('either', at('landing'), at('template')),
 
-  /* conflicts — same slot */
+  /* conflicts — same slot. Not the same claim as either/or: you'll do both
+     Sunday things, just not on the same Sunday. */
+  link('clash', at('hike'), at('matinee')),
   link('clash', at('dentist'), at('post-office')),
   link('clash', at('bloodwork'), at('inspection')),
   link('clash', whole(work), whole(family), true),
@@ -263,6 +272,10 @@ const edges = [
   link('informs', at('analytics'), at('launch')),
   link('informs', at('goals'), at('qreview'), true),
   link('informs', at('mobile-bug'), at('landing')),
+
+  /* An arm already decided against, kept on record with the edge that explains
+     why it never happened. */
+  link('either', at('contractor'), at('landing')),
 ];
 
 /* ------------------------------------------------------------------------ */
@@ -329,7 +342,7 @@ const world = layout(buckets);
  */
 export const SEED = {
   version: 2,
-  seedVersion: 4,
+  seedVersion: 5,
   world,
   buckets,
   edges,
