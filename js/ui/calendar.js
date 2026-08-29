@@ -20,7 +20,7 @@
  * You read the shape of a month before you read a single word. Text arrives
  * when you pick a day.
  */
-import { state, scheduledByDate, activeSprint, sprintItems, emit } from '../core/store.js';
+import { state, scheduledByDate, activeSprint, sprintItems, isDropped, emit } from '../core/store.js';
 import { fillCSS } from '../util/patterns.js';
 import { MONTHS, DOW, isoOf, longDate, daysInMonth, firstDow } from '../util/dates.js';
 import { el, $, clear } from '../util/dom.js';
@@ -97,7 +97,9 @@ export function renderCalendar() {
 
   for (let day = 1; day <= total; day++) {
     const iso = isoOf(year, month, day);
-    const all = byDate.get(iso) || [];
+    /* Dropped work is not happening, so it leaves the calendar outright — the
+       date is kept on the task, not shown here. */
+    const all = (byDate.get(iso) || []).filter(({ item }) => !isDropped(item));
     const shown = view.showDone ? all : all.filter(({ item }) => item.status !== 'done');
     const hidden = all.length - shown.length;
 
@@ -137,7 +139,7 @@ export function renderCalendar() {
   wrap.appendChild(grid);
 
   /* ---------------- the picked day ---------------- */
-  const all = byDate.get(selected) || [];
+  const all = (byDate.get(selected) || []).filter(({ item }) => !isDropped(item));
   const shown = view.showDone ? all : all.filter(({ item }) => item.status !== 'done');
   const hidden = all.length - shown.length;
 

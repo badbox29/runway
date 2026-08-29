@@ -15,11 +15,11 @@
 import {
   state, getItem, getBucket, getSprint, updateItem, removeItem, moveItem,
   addComment, removeComment, updateEdge, removeEdge, addEdge, allItems,
-  dateFitsSprint, POINT_SCALE, STATUSES,
+  dateFitsSprint, isDropped, dropItem, POINT_SCALE, STATUSES,
 } from '../core/store.js';
-import { edgesFor } from '../core/relations.js';
+import { edgesFor, exclusiveGroup } from '../core/relations.js';
 import { TYPES, typeOf } from '../config/types.js';
-import { requestMove } from './resolve.js';
+import { requestMove, requestStatus, requestRestore } from './resolve.js';
 import { fillCSS, adapt } from '../util/patterns.js';
 import { longDate } from '../util/dates.js';
 import { el, $, clear } from '../util/dom.js';
@@ -100,12 +100,29 @@ function fields(item, bucket) {
   const box = el('section', { class: 'dt-section' });
 
   /* status */
+  /* Dropped is a state, not a lane. Showing it as a fourth button would invite
+     dropping something by mis-click; it gets its own action below instead. */
+  if (isDropped(item)) {
+    const winner = exclusiveGroup(item.id).find((r) => !isDropped(r.item));
+    box.appendChild(el('div', { class: 'dt-dropped' }, [
+      el('strong', { text: 'Dropped.' }),
+      document.createTextNode(winner
+        ? ` You picked ${winner.item.title} instead. Everything here is kept.`
+        : ' Kept on record, out of the backlog.'),
+    ]));
+    const back = el('button', { class: 'dt-restore', text: 'Restore this task' });
+    back.addEventListener('click', () => requestRestore(item.id));
+    box.appendChild(back);
+  }
+
   const status = el('div', { class: 'dt-seg' });
   for (const s of STATUSES) {
     const b = el('button', {
       class: `dt-segbtn${item.status === s ? ' on' : ''}`, text: STATUS_LABEL[s],
     });
-    b.addEventListener('click', () => updateItem(item.id, { status: s }));
+    /* Finishing can settle an oxygen choice, so it routes through the planner
+       rather than writing the field directly. */
+    b.addEventListener('click', () => requestStatus(item.id, s));
     status.appendChild(b);
   }
   box.appendChild(row('Status', status));
@@ -159,11 +176,21 @@ function fields(item, bucket) {
   pick.addEventListener('change', () => moveItem(item.id, pick.value));
   box.appendChild(row('Bucket', pick));
 
+  const actions = el('div', { class: 'dt-actions' });
+  if (!isDropped(item)) {
+    const drop = el('button', { class: 'dt-danger', text: 'Drop' });
+    drop.addEventListener('click', () => dropItem(item.id));
+    actions.appendChild(drop);
+  }
   const del = el('button', { class: 'dt-danger', text: 'Delete task' });
   del.addEventListener('click', () => {
-    if (confirm(`Delete “${item.title}”?`)) { removeItem(item.id); closeDetail(); }
+    if (confirm(`Delete “${item.title}”? Dropping keeps it on record instead.`)) {
+      removeItem(item.id);
+      closeDetail();
+    }
   });
-  box.appendChild(del);
+  actions.appendChild(del);
+  box.appendChild(actions);
   return box;
 }
 
@@ -213,6 +240,7 @@ function connections(item) {
 
     const unresolved = other && other.item.status !== 'done'
       && ['depends', 'blocks', 'waiting'].includes(edge.type) && outgoing;
+    const rivalDropped = other && edge.type === 'either' && isDropped(other.item);
 
     box.appendChild(el('div', { class: `dt-conn${unresolved ? ' unresolved' : ''}` }, [
       el('span', { class: 'dt-line', style: `border-top-color:${adapt(t.color)};border-top-style:${t.dash ? 'dashed' : 'solid'}` }),
@@ -220,7 +248,8 @@ function connections(item) {
         pick,
         el('span', {
           class: 'dt-conn-other',
-          text: `${t.directed ? (outgoing ? '→' : '←') : '↔'} ${otherName}`,
+          text: `${t.directed ? (outgoing ? '→' : '←') : '↔'} ${otherName}`
+            + (rivalDropped ? ' · dropped' : ''),
         }),
       ]),
       flip,

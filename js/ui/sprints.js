@@ -19,7 +19,7 @@
  *    connections at all — otherwise the graph is decoration.
  */
 import {
-  state, backlogItems, sprintItems, getSprint, blockersFor, progressOf, daysUntil,
+  state, backlogItems, droppedItems, sprintItems, getSprint, blockersFor, progressOf, daysUntil,
   addSprint, startSprint, completeSprint, removeSprint, updateItem,
   cyclePoints, addItem, emit, dateFitsSprint, STATUSES,
 } from '../core/store.js';
@@ -27,7 +27,7 @@ import { fillCSS } from '../util/patterns.js';
 import { longDate, shortDate } from '../util/dates.js';
 import { el, $, $$, clear } from '../util/dom.js';
 import { openDetail } from './detail.js';
-import { requestMove } from './resolve.js';
+import { requestMove, requestStatus } from './resolve.js';
 
 const LANES = [
   { id: 'todo', label: 'To do' },
@@ -40,7 +40,7 @@ const LANES = [
  * minute is not part of the board, and persisting it would mean opening Runway
  * tomorrow to a list that is mysteriously missing half its rows.
  */
-const view = { open: true, text: '', bucket: 'all', hideDone: true };
+const view = { open: true, text: '', bucket: 'all', hideDone: true, dropped: false };
 
 let root;
 let drag = null;
@@ -236,7 +236,10 @@ const blockerDot = (blockers) => (blockers.length
  * is not an inventory, it's a haystack.
  */
 function backlog() {
-  const all = backlogItems();
+  /* Dropped work is out of the backlog by default — that is most of the point
+     of the state — but reachable, because "what did we decide against" is a
+     question worth being able to answer. */
+  const all = view.dropped ? droppedItems() : backlogItems();
   const shown = applyFilter(all);
 
   const caret = el('button', {
@@ -253,7 +256,7 @@ function backlog() {
   }, [
     el('header', { class: 'sp-bl-head' }, [
       caret,
-      el('h3', { text: 'Backlog' }),
+      el('h3', { text: view.dropped ? 'Dropped' : 'Backlog' }),
       el('span', { class: 'n', text: countLabel(shown.length, all.length) }),
       el('span', { class: 'spacer' }),
       filters(all),
@@ -311,7 +314,15 @@ function filters(all) {
     refreshRows(all);
   });
 
-  return el('div', { class: 'sp-filters' }, [search, pick, done]);
+  const droppedCount = droppedItems().length;
+  const dropped = el('button', {
+    class: `tool${view.dropped ? ' on' : ''}`,
+    text: view.dropped ? 'Back to backlog' : `Dropped · ${droppedCount}`,
+    title: 'Work you decided against',
+  });
+  dropped.addEventListener('click', () => { view.dropped = !view.dropped; renderSprints(); });
+
+  return el('div', { class: 'sp-filters' }, [search, pick, done, dropped]);
 }
 
 function refreshRows(all) {
@@ -344,7 +355,7 @@ function row({ item, bucket }) {
 
   /* With the backlog below the fold, dragging a row up into a lane means
      dragging across a scroll. This is the one-click way to do the same thing. */
-  const send = sprint && sprint.status !== 'done'
+  const send = sprint && sprint.status !== 'done' && item.status !== 'dropped'
     ? el('button', { class: 'sp-send', text: '↑', title: `Send to ${sprint.name}` })
     : null;
   if (send) {
@@ -355,7 +366,7 @@ function row({ item, bucket }) {
   }
 
   const node = el('div', {
-    class: `sp-row${item.status === 'done' ? ' done' : ''}`,
+    class: `sp-row${item.status === 'done' ? ' done' : ''}${item.status === 'dropped' ? ' dropped' : ''}`,
     style: `border-left-color:${bucket.color}`,
     dataset: { item: item.id },
   }, [
@@ -487,7 +498,7 @@ function bindDragging() {
     if (!STATUSES.includes(status) || !state.currentSprint) return;
     /* Shuffling between lanes inside one sprint changes no commitment, so it
        never needs resolving; crossing into the sprint might. */
-    if (d.item.sprintId === state.currentSprint) updateItem(d.item.id, { status });
+    if (d.item.sprintId === state.currentSprint) requestStatus(d.item.id, status);
     else requestMove(d.item.id, state.currentSprint, status);
   });
 }

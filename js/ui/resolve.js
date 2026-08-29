@@ -1,12 +1,20 @@
 /**
  * The resolution dialog.
  *
- * Shown only when a sprint move has consequences. A plain move never opens
- * anything — asking permission for a decision with no side effects trains
- * people to dismiss the dialog without reading it, which is exactly the habit
- * that makes it useless on the day it matters.
+ * Shown only when an action has consequences. A plain move opens nothing —
+ * asking permission for a decision with no side effects trains people to
+ * dismiss the dialog without reading it, which is the habit that makes it
+ * useless on the day it matters.
+ *
+ * Note the asymmetry in what is offered. Pulled prerequisites are checkboxes:
+ * you may knowingly commit to something without its dependencies. Dropped
+ * rivals are not, because an oxygen choice has no version where you pick one
+ * and leave the others available — that would make the connection decorative.
  */
-import { planMove, applyPlan, acceptAll, acceptNone } from '../core/relations.js';
+import {
+  planMove, planComplete, planRestore, applyPlan, acceptAll, acceptNone,
+} from '../core/relations.js';
+import { updateItem } from '../core/store.js';
 import { el, $, clear } from '../util/dom.js';
 
 const REASON = {
@@ -14,7 +22,6 @@ const REASON = {
   blocks: 'blocking this',
   waiting: 'waiting on this',
   bundle: 'do together',
-  either: 'can’t have both',
 };
 
 let host;
@@ -27,21 +34,41 @@ export function initResolve() {
   });
 }
 
+export const isDialogOpen = () => host && !host.hidden;
+
 function close() {
   host.hidden = true;
   clear(host);
 }
 
-/**
- * Move a task into a sprint, or back to the backlog, taking its connections
- * into account. This is the only entry point the views should use.
- */
+/* ---------------------------------------------------------- entry points */
+
+/** Move a task into a sprint, or back to the backlog. */
 export function requestMove(itemId, sprintId, status = 'todo') {
-  const plan = planMove(itemId, sprintId);
+  run(planMove(itemId, sprintId), status);
+}
+
+/**
+ * Change a task's status. Only finishing can settle an oxygen choice, so the
+ * other transitions go straight through.
+ */
+export function requestStatus(itemId, status) {
+  if (status !== 'done') { updateItem(itemId, { status }); return; }
+  run(planComplete(itemId), status);
+}
+
+/** Bring a dropped task back. */
+export function requestRestore(itemId) {
+  run(planRestore(itemId), 'todo');
+}
+
+function run(plan, status) {
   if (!plan) return;
   if (!plan.needsAttention) { applyPlan(plan, { ...acceptNone(), status }); return; }
   open(plan, status);
 }
+
+/* ------------------------------------------------------------- dialog */
 
 function open(plan, status) {
   clear(host);
@@ -49,73 +76,105 @@ function open(plan, status) {
 
   const chosen = acceptAll(plan);
   const box = el('div', { class: 'rs-box', role: 'dialog', 'aria-modal': 'true' });
-
-  const returning = plan.kind === 'return';
   box.appendChild(el('header', { class: 'rs-head' }, [
-    el('h2', {
-      text: returning ? 'Send back to the backlog?' : `Commit to ${plan.sprint ? plan.sprint.name : 'this sprint'}?`,
-    }),
+    el('h2', { text: headline(plan) }),
     el('p', { class: 'rs-sub', text: plan.subject.item.title }),
   ]));
 
   const body = el('div', { class: 'rs-body' });
 
-  if (returning) {
-    section(body, 'Left without a prerequisite',
-      'These are still committed and would have nothing to start from.',
+  if (plan.kind === 'return') {
+    optional(body, 'Left without a prerequisite',
+      'These stay committed but would have nothing to start from.',
       plan.strand, chosen.strand, 'strand');
   } else {
-    section(body, 'Comes along',
+    optional(body, 'Comes along',
       'This task can’t be honestly committed to without them.',
       plan.pull, chosen.pull, 'pull');
-    section(body, 'Has to leave',
-      'An either/or partner is already in this sprint. Keeping both would commit you to a choice you said you hadn’t made.',
-      plan.evict, chosen.evict, 'evict');
+  }
+
+  /* The oxygen choice being resolved. Not a checkbox: this is the decision. */
+  if (plan.drop.length) {
+    const list = el('div', { class: 'rs-list' });
+    for (const e of plan.drop) {
+      list.appendChild(el('div', { class: 'rs-item fixed' }, [
+        el('span', { class: 'rs-title', text: e.item.title }),
+        el('span', { class: 'rs-tag drop', text: 'dropped' }),
+        el('span', { class: 'rs-where', text: e.bucket.name }),
+      ]));
+    }
+    body.appendChild(el('section', { class: 'rs-section' }, [
+      el('h3', { text: plan.drop.length === 1 ? 'The one you’re not doing' : 'The ones you’re not doing' }),
+      el('p', {
+        class: 'rs-blurb',
+        text: 'An either/or is a choice about where finite attention goes, and this is where it gets made. They keep their notes and connections, leave the backlog, and can be brought back.',
+      }),
+      list,
+    ]));
+  }
+
+  if (plan.settled.length) {
+    warn(body, 'You already decided this', plan.settled.map((e) =>
+      `${e.item.title} is already done. Picking ${e.against.title} contradicts that — nothing here can undo it.`));
   }
 
   if (plan.contradictions.length) {
-    const list = el('ul', { class: 'rs-warn' });
-    for (const c of plan.contradictions) {
-      list.appendChild(el('li', { text: `${c.a.title} and ${c.b.title} are an either/or, but both are being pulled in. You'll need to drop one.` }));
-    }
-    body.appendChild(note('Can’t resolve this one', list));
+    warn(body, 'Can’t resolve this one', plan.contradictions.map((c) =>
+      `${c.a.title} and ${c.b.title} are an either/or, but both are being pulled in. You'll have to drop one yourself.`));
+  }
+
+  if (plan.stranded.length) {
+    warn(body, 'Left with nothing to start from', plan.stranded.map((e) =>
+      `${e.item.title} needs ${e.blockedBy.title}, which is being dropped.`));
   }
 
   if (plan.clashes.length) {
-    const list = el('ul', { class: 'rs-warn' });
-    for (const c of plan.clashes) {
-      list.appendChild(el('li', {
-        text: `${c.against.title} conflicts with ${c.item.title}${c.sameDay ? ' — same day' : ''}.`,
-      }));
-    }
-    body.appendChild(note('Worth knowing', list));
+    warn(body, 'Worth knowing', plan.clashes.map((c) =>
+      `${c.against.title} conflicts with ${c.item.title}${c.sameDay ? ' — same day' : ''}.`));
   }
 
   if (plan.offWindow.length) {
-    const list = el('ul', { class: 'rs-warn' });
-    for (const c of plan.offWindow) {
-      list.appendChild(el('li', { text: `${c.item.title} is dated ${c.item.date}, outside this sprint.` }));
-    }
-    body.appendChild(note('Dated outside the window', list));
+    warn(body, 'Dated outside the window', plan.offWindow.map((c) =>
+      `${c.item.title} is dated ${c.item.date}, outside this sprint.`));
   }
 
   box.appendChild(body);
 
-  const primary = el('button', { class: 'tool on', text: returning ? 'Send all back' : 'Commit all' });
-  primary.addEventListener('click', () => { applyPlan(plan, { ...chosen, status }); close(); });
-
-  const solo = el('button', { class: 'tool', text: 'Just this one' });
-  solo.addEventListener('click', () => { applyPlan(plan, { ...acceptNone(), status }); close(); });
+  const go = el('button', { class: 'tool on', text: confirmLabel(plan) });
+  go.addEventListener('click', () => { applyPlan(plan, { ...chosen, status }); close(); });
 
   const cancel = el('button', { class: 'tool', text: 'Cancel' });
   cancel.addEventListener('click', close);
 
-  box.appendChild(el('footer', { class: 'rs-foot' }, [cancel, el('span', { class: 'spacer' }), solo, primary]));
+  box.appendChild(el('footer', { class: 'rs-foot' }, [
+    cancel, el('span', { class: 'spacer' }), go,
+  ]));
   host.appendChild(box);
-  primary.focus();
+  go.focus();
 }
 
-function section(parent, title, blurb, entries, chosenSet, kind) {
+function headline(plan) {
+  if (plan.kind === 'return') return 'Send back to the backlog?';
+  if (plan.kind === 'complete') {
+    return plan.drop.length ? 'Finishing this settles the choice' : 'Mark done?';
+  }
+  if (plan.kind === 'restore') return 'Restore this and re-open the choice?';
+  if (plan.drop.length) {
+    return `Pick this for ${plan.sprint ? plan.sprint.name : 'the sprint'}?`;
+  }
+  return `Commit to ${plan.sprint ? plan.sprint.name : 'this sprint'}?`;
+}
+
+function confirmLabel(plan) {
+  const n = plan.drop.length;
+  const dropPart = n ? ` and drop ${n === 1 ? 'the other' : `the other ${n}`}` : '';
+  if (plan.kind === 'return') return 'Send back';
+  if (plan.kind === 'complete') return `Mark done${dropPart}`;
+  if (plan.kind === 'restore') return `Restore${dropPart}`;
+  return `Commit${dropPart}`;
+}
+
+function optional(parent, title, blurb, entries, chosenSet, kind) {
   if (!entries || !entries.length) return;
   const list = el('div', { class: 'rs-list' });
   for (const e of entries) {
@@ -137,5 +196,8 @@ function section(parent, title, blurb, entries, chosenSet, kind) {
   ]));
 }
 
-const note = (title, list) =>
-  el('section', { class: 'rs-section' }, [el('h3', { text: title }), list]);
+function warn(parent, title, lines) {
+  const list = el('ul', { class: 'rs-warn' });
+  for (const line of lines) list.appendChild(el('li', { text: line }));
+  parent.appendChild(el('section', { class: 'rs-section' }, [el('h3', { text: title }), list]));
+}

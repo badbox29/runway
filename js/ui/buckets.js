@@ -7,7 +7,7 @@
  */
 import {
   state, commit, emit, moveItem, addItem, updateItem, removeItem, removeBucket,
-  isCommitted, activeSprint, blockersFor,
+  isCommitted, activeSprint, blockersFor, isDropped,
 } from '../core/store.js';
 import { openDetail } from './detail.js';
 import { fillCSS } from '../util/patterns.js';
@@ -16,7 +16,7 @@ import { el, $, $$, clear } from '../util/dom.js';
 import { toWorld, growToFit } from './canvas.js';
 import { renderEdges } from './edges.js';
 import { startWire } from './wiring.js';
-import { openBucketMenu } from './popover.js';
+import { openBucketMenu, openItemContextMenu } from './popover.js';
 
 let layer;
 
@@ -90,7 +90,8 @@ function rowFor(b, item) {
   const blocked = blockersFor(item.id).length > 0;
 
   const row = el('div', {
-    class: `row${item.status === 'done' ? ' done' : ''}${committed ? ' committed' : ''}`,
+    class: `row${item.status === 'done' ? ' done' : ''}`
+      + `${isDropped(item) ? ' dropped' : ''}${committed ? ' committed' : ''}`,
     dataset: { node: `item:${item.id}`, id: item.id },
     title: committed ? `In ${activeSprint().name}` : '',
   }, [
@@ -107,7 +108,7 @@ function rowFor(b, item) {
   });
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    openDetail(item.id);
+    openItemContextMenu(e.clientX, e.clientY, item, b);
   });
   return row;
 }

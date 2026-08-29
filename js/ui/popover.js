@@ -8,13 +8,15 @@
 import { TYPES, typeOf } from '../config/types.js';
 import { PALETTE, PATTERNS } from '../config/palette.js';
 import {
-  state, addEdge, updateEdge, removeEdge, updateItem, removeItem,
-  removeBucket, commit, emit, labelFor, assignToSprint, blockersFor,
-  POINT_SCALE, STATUSES,
+  state, addEdge, updateEdge, removeEdge, removeItem, removeBucket,
+  commit, emit, labelFor, activeSprint, isDropped, dropItem,
 } from '../core/store.js';
+import { exclusiveGroup } from '../core/relations.js';
+import { requestStatus, requestMove, requestRestore } from './resolve.js';
 import { fillCSS } from '../util/patterns.js';
 import { el } from '../util/dom.js';
 import { renderEdges } from './edges.js';
+import { openDetail } from './detail.js';
 
 export function closeMenus() {
   document.querySelectorAll('.pop').forEach((n) => n.remove());
@@ -141,6 +143,73 @@ export function openEdgeMenu(x, y, id) {
 }
 
 /* -------------------------------------------------------- item */
+
+/* --------------------------------------------------------- task */
+
+/**
+ * The canvas context menu.
+ *
+ * Completing a task from here settles an oxygen choice exactly as committing to
+ * a sprint does — the decision is the same decision, so it has to run through
+ * the same planner rather than writing `status` directly. The menu names the
+ * consequence up front so the dialog is never a surprise.
+ */
+export function openItemContextMenu(x, y, item, bucket) {
+  const pop = popAt(x, y);
+  pop.appendChild(el('div', { class: 'ph', text: bucket.name }));
+
+  const rivals = exclusiveGroup(item.id).filter((r) => !isDropped(r.item) && r.item.status !== 'done');
+  const sprint = activeSprint();
+
+  action(pop, 'Open details', () => openDetail(item.id));
+
+  if (isDropped(item)) {
+    action(pop, 'Restore', () => requestRestore(item.id));
+  } else {
+    if (item.status === 'done') {
+      action(pop, 'Reopen', () => requestStatus(item.id, 'todo'));
+    } else {
+      action(pop, 'Mark done',
+        () => requestStatus(item.id, 'done'),
+        rivals.length
+          ? `settles an either/or — drops ${rivals.length === 1 ? rivals[0].item.title : `${rivals.length} others`}`
+          : null);
+    }
+
+    if (sprint && item.sprintId !== sprint.id) {
+      action(pop, `Send to ${sprint.name}`,
+        () => requestMove(item.id, sprint.id),
+        rivals.length
+          ? `settles an either/or — drops ${rivals.length === 1 ? rivals[0].item.title : `${rivals.length} others`}`
+          : null);
+    } else if (sprint && item.sprintId === sprint.id) {
+      action(pop, 'Return to backlog', () => requestMove(item.id, null));
+    }
+
+    pop.appendChild(el('div', { class: 'sep' }));
+    action(pop, 'Drop', () => dropItem(item.id), 'decided against, kept on record');
+  }
+
+  pop.appendChild(el('div', { class: 'sep' }));
+  const del = el('button', { class: 'opt danger', text: 'Delete task' });
+  del.addEventListener('click', () => {
+    if (confirm(`Delete “${item.title}”? Dropping keeps it on record instead.`)) removeItem(item.id);
+    closeMenus();
+  });
+  pop.appendChild(del);
+}
+
+function action(pop, label, onClick, sub) {
+  const b = el('button', { class: 'opt' }, [
+    el('span', {}, [
+      document.createTextNode(label),
+      sub ? el('span', { class: 'sub', text: sub }) : null,
+    ]),
+  ]);
+  b.addEventListener('click', () => { onClick(); closeMenus(); });
+  pop.appendChild(b);
+  return b;
+}
 
 /* ------------------------------------------------------ bucket */
 
