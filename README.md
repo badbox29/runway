@@ -70,13 +70,30 @@ in this fortnight's sprint gets flagged; it is never silently rewritten.
 
 **Committing to a task respects its connections.** Pull something into a sprint
 and Runway walks the graph first. Prerequisites and do-together partners come
-along — transitively, so a chain arrives whole. An either/or partner already in
-the sprint has to leave, because keeping both would commit you to a choice you
-said you hadn't made. Same-slot conflicts are reported. If any of that applies
-you get a dialog listing it, with **Commit all**, **Just this one**, or
-**Cancel**; if none of it applies the task just moves. Sending a task back to
-the backlog runs the mirror check: anything still committed that was counting on
-it gets named, so you can send it back too.
+along — transitively, so a chain arrives whole. Same-slot conflicts are
+reported. If any of that applies you get a dialog; if none of it applies the
+task just moves. Sending a task back to the backlog runs the mirror check:
+anything still committed that was counting on it gets named, so you can send it
+back too.
+
+**Either/or is an oxygen choice.** It does not mean "these collide on Tuesday" —
+that's *Conflicts*. It means only one of these is getting done. So committing to
+one arm **is** the decision, and the other arms are **dropped**: kept with their
+notes, dates and connections, taken out of the backlog, reversible. Finishing an
+arm settles it the same way, from the sprint board or from the canvas
+right-click menu. Restoring a dropped arm re-opens the choice and drops whatever
+won.
+
+Drops are not a checkbox in that dialog. Prerequisites are — you may knowingly
+commit to something without its dependencies — but there is no version of an
+oxygen choice where you pick one and leave the rest sitting in the backlog. That
+would make the connection decorative.
+
+Exclusivity is transitive, so the group is the connected component over
+either/or edges: only one of A, B, or C. That falls out of the graph without
+storing anything new. If a rival is already *finished*, nothing can resolve
+that — you made the choice already — so it's reported rather than silently
+undone.
 
 An out-of-window date deliberately does *not* open that dialog. Most backlog
 tasks are dated beyond any two-week horizon, so it would fire on nearly every
@@ -124,6 +141,7 @@ between machines.
 | **↑** on a backlog row | send it to the current sprint |
 | Click a points chip | cycle the estimate |
 | Click any task, anywhere | open the detail panel |
+| Right-click a task on the canvas | complete, commit, drop, delete |
 | Esc | close the panel or dialog |
 | Drag a bucket header | move the card |
 | Double-click a header | collapse / expand |
@@ -143,8 +161,8 @@ between machines.
 |---|---|---|
 | Depends on | can't start until the other is done | yes |
 | Blocks | a hard stop until it clears | yes |
-| Either / or | pick one, not both | no |
-| Conflicts | same slot, can't do both | no |
+| Either / or | only one of these is getting done | no |
+| Conflicts | same slot — both, but not at once | no |
 | Do together | one trip, one sitting | no |
 | Waiting on | needs another person first | yes |
 | Informs | changes how you'd do the other | yes |
@@ -248,9 +266,15 @@ by construction, and can stay open while you work in the view behind it. The
 popover that remains, for canvas connection and bucket menus, now measures
 itself after insertion and flips above the cursor when there's more room there.
 
-**A task has one completion field.** `status` is `todo | doing | done` — there
-is no separate `done` boolean, because two fields meaning the same thing are
-two fields that can disagree. Boards saved before sprints existed are migrated
+**A task has one completion field.** `status` is `todo | doing | done |
+dropped` — there is no separate `done` boolean, because two fields meaning the
+same thing are two fields that can disagree. `dropped` exists because the losing
+arms of an oxygen choice need somewhere honest to go: `done` would be a lie,
+deleting destroys the task and the connection that explains it, and leaving them
+in the backlog means rediscovering them in three months as mystery work nobody
+can account for. Dropped work is out of the backlog by default and reachable
+behind a toggle, because "what did we decide against, and why" is a question
+worth being able to answer. Boards saved before sprints existed are migrated
 on load, so an upgrade never costs you a board.
 
 **Change events are typed.** `store.js` emits `structure`, `geometry`, `edges`,
