@@ -29,13 +29,25 @@ No build step, no bundler, no runtime dependencies.
 
 ## Views
 
-**Sprints** (the landing view) is a light personal agile tracker: a backlog on
-the left, and to-do / in-progress / done lanes for the current sprint. Drag a
-card by its textured grip to move it between lanes or back to the backlog.
-Click the points chip to estimate. Create a sprint, start it, and close it —
-closing returns unfinished work to the backlog rather than dragging it along
-silently, because carrying work over invisibly is how a sprint stops meaning
-anything.
+**Sprints** (the landing view) is a light personal agile tracker, laid out the
+way Jira settled on: the current sprint sits at the top as to-do / in-progress /
+done lanes, and the backlog runs full width beneath it as a dense list of rows.
+That split matches how the two are used — the sprint is a board you work *on*,
+the backlog is an inventory you scan *down*, and cards and rows are the right
+shapes for those two jobs.
+
+Drag by the textured grip to move a task between lanes or back to the backlog;
+the view auto-scrolls when you drag near an edge. Since the backlog is below the
+fold, each row also has a **↑** button that sends it straight to the current
+sprint. Click the points chip to estimate. The backlog header carries a filter —
+by text, by bucket, and show/hide done — because at any real size that list is
+long, and a wall of rows with no way to narrow it is a haystack, not an
+inventory. The sprint header stays sticky while you scroll, so the progress
+figures are still in view while you decide what to pull up.
+
+Create a sprint, start it, and close it — closing returns unfinished work to the
+backlog rather than dragging it along silently, because carrying work over
+invisibly is how a sprint stops meaning anything.
 
 A task has a bucket *and* a sprint. The bucket is which part of your life it
 belongs to and doesn't change when the fortnight does; the sprint is a time
@@ -71,6 +83,7 @@ between machines.
 | `s` / `b` / `c` | sprints / board / calendar |
 | `d` | toggle dark mode |
 | Drag a card grip | move between lanes or to the backlog |
+| **↑** on a backlog row | send it to the current sprint |
 | Click a points chip | cycle the estimate |
 | Drag a bucket header | move the card |
 | Double-click a header | collapse / expand |
@@ -237,6 +250,8 @@ classic script. That's a test detail only — Runway itself ships unbundled.
 
 ## Known gaps
 
+- The backlog filter isn't remembered between sessions, on purpose — reopening
+  to a list that is quietly missing rows is worse than re-typing a filter.
 - No burndown chart. Progress is a point total, not a history — nothing records
   daily snapshots, so there's no line to draw yet.
 - Sprints have no velocity memory, so a new sprint can't suggest a capacity.
