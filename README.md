@@ -30,8 +30,8 @@ No build step, no bundler, no runtime dependencies.
 ## Views
 
 **Sprints** (the landing view) is a light personal agile tracker, laid out the
-way Jira settled on: the current sprint sits at the top as to-do / in-progress /
-done lanes, and the backlog runs full width beneath it as a dense list of rows.
+way Jira settled on: the current sprint sits at the top as columns, and the
+backlog runs full width beneath it as a dense list of rows.
 That split matches how the two are used — the sprint is a board you work *on*,
 the backlog is an inventory you scan *down*, and cards and rows are the right
 shapes for those two jobs.
@@ -48,6 +48,34 @@ figures are still in view while you decide what to pull up.
 Create a sprint, start it, and close it — closing returns unfinished work to the
 backlog rather than dragging it along silently, because carrying work over
 invisibly is how a sprint stops meaning anything.
+
+### Columns
+
+Four by default — **To do**, **Blocked**, **In progress**, **Done** — and the
+*Columns* button adds, renames, reorders, and removes them. The four defaults
+can be renamed and reordered but not removed: the rest of the app reasons about
+them, `done` decides sprint progress and what survives closing a sprint, and
+`todo` is where returned and restored work lands. Their delete controls are
+absent rather than disabled, since a button that exists only to refuse you is
+worse than no button. Removing a custom column returns its tasks to To do.
+
+**Blocked is computed, not a place you file things.** Runway already knows what
+is blocked — it's in the connection graph — so a task with unfinished
+prerequisites appears there on its own, and leaves on its own when they're done.
+Each card says what it's waiting on, because being told something is blocked
+without being told by what is the least useful thing a board can say.
+
+Making Blocked a purely manual lane would have created two contradictory answers
+to one question: a card parked in Blocked with every prerequisite finished, or a
+card in To do with a red dot on it. That's the `done`-boolean-beside-`status`
+mistake in a new costume. So the column is computed first and manual second —
+drag a card in to record a blocker Runway can't see (a vendor, an approval, a
+person), and it asks what for. Dragging a card *out* of derived Blocked is
+refused with the reason, rather than silently snapping back: the way out is to
+finish the thing it's waiting on.
+
+Derived blocking only applies to work not yet started. If you're actively on
+something you aren't blocked on it, whatever the graph says.
 
 A task has a bucket *and* a sprint. The bucket is which part of your life it
 belongs to and doesn't change when the fortnight does; the sprint is a time
@@ -137,7 +165,7 @@ between machines.
 |---|---|
 | `s` / `b` / `c` | sprints / board / calendar |
 | `d` | toggle dark mode |
-| Drag a card grip | move between lanes or to the backlog |
+| Drag a card grip | move between columns or to the backlog |
 | **↑** on a backlog row | send it to the current sprint |
 | Click a points chip | cycle the estimate |
 | Click any task, anywhere | open the detail panel |
@@ -333,6 +361,8 @@ classic script. That's a test detail only — Runway itself ships unbundled.
 - Tasks committed to a *future* sprint don't appear in the sprint view until you
   select that sprint — they're neither in the backlog nor in the current lanes.
   Jira solves this with per-sprint sections above the backlog; worth copying.
+- Column layout is per board, not per sprint — you can't run one sprint with a
+  review stage and another without.
 - No burndown chart. Progress is a point total, not a history — nothing records
   daily snapshots, so there's no line to draw yet.
 - Sprints have no velocity memory, so a new sprint can't suggest a capacity.
