@@ -8,7 +8,7 @@
 import {
   state, subscribe, undo, addBucket, newId, load, removeEdge,
 } from './core/store.js';
-import { restore, startAutosave, exportFile, importFile } from './core/persist.js';
+import { readSaved, clearSaved, save, startAutosave, exportFile, importFile } from './core/persist.js';
 import { initTheme, setScheme, toggleMode, getTheme, schemeList, onThemeChange } from './core/theme.js';
 import { SEED } from '../data/seed.js';
 import { PALETTE } from './config/palette.js';
@@ -33,15 +33,63 @@ initWiring(handleWireComplete);
 initCalendar();
 initSprints();
 
-/* The seed is plain JSON, so a JSON clone is both sufficient and portable —
-   it keeps the module off structuredClone, which older browsers lack. */
-if (!restore()) load(JSON.parse(JSON.stringify(SEED)));
+bootBoard();
 startAutosave();
+/* Autosave only reacts to later changes, and the board's initial load has
+   already emitted by now. Write once here so a first visit records which seed
+   generation it came from — without that stamp, the next release can't tell an
+   untouched demo from a board someone has worked on. */
+save();
 
 buildSchemePicker();
 renderLegend();
 setView('sprints');
 goHome();
+
+/* -------------------------------------------------------------- board */
+
+/* A function declaration, not a const arrow: bootBoard() runs at the top of
+   this module, above these definitions, and a const would still be in the
+   temporal dead zone when it got there. */
+function freshSeed() {
+  /* The seed is plain JSON, so a JSON clone is both sufficient and portable —
+     it keeps the module off structuredClone, which older browsers lack. */
+  return JSON.parse(JSON.stringify(SEED));
+}
+
+/** Load the demo board, replacing whatever is there. */
+function loadSeed() {
+  load(freshSeed(), { fromSeed: true, seedVersion: SEED.seedVersion });
+}
+
+/**
+ * Decide which board wins on boot.
+ *
+ * A saved board normally wins — that is the whole point of autosave. The one
+ * exception is a board that is still the untouched demo from an older release:
+ * that gets replaced, so shipping a new data/seed.js actually reaches people
+ * who have opened Runway before. The moment anyone edits a board, `fromSeed`
+ * clears and it is never replaced again.
+ */
+function bootBoard() {
+  if (new URL(window.location.href).searchParams.has('reset')) { loadSeed(); return; }
+  const saved = readSaved();
+  if (!saved) { loadSeed(); return; }
+  const staleDemo = saved.fromSeed && saved.seedVersion !== SEED.seedVersion;
+  if (staleDemo) loadSeed();
+  else load(saved);
+}
+
+function resetBoard() {
+  const touched = !state.fromSeed;
+  const warning = touched
+    ? 'Replace this board with the demo board? Anything you have added will be lost.'
+    : 'Reload the demo board?';
+  if (!confirm(warning)) return;
+  clearSaved();
+  loadSeed();
+  goHome();
+}
 
 /* --------------------------------------------------------- rendering */
 
@@ -118,6 +166,7 @@ document.addEventListener('click', (e) => {
     case 'zoom-out': zoomOut(); break;
     case 'export': exportFile(); break;
     case 'import': $('#fileInput').click(); break;
+    case 'reset': resetBoard(); break;
     case 'mode': toggleMode(); break;
     default: break;
   }
