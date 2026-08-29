@@ -184,7 +184,10 @@ const project = bucket('Side project', '#0F6E6E', 'diagonal', [
   task('Pick a colour scheme', 2, { status: 'doing', points: 2, sprintId: 's-now', ref: 'scheme' }),
   task('Fix the mobile layout bug', 6, { points: 3, sprintId: 's-now', ref: 'mobile-bug' }),
   task('Ask Jo to review the copy', 7, { points: 1, ref: 'jo' }),
-  task('Set up analytics', 9, { points: 2, ref: 'analytics' }),
+  task('Set up analytics', 9, {
+    points: 2, ref: 'analytics', status: 'blocked', sprintId: 's-now',
+    blockedReason: 'Waiting on the vendor to approve the account',
+  }),
   task('Add dark mode', 13, { points: 5, ref: 'darkmode' }),
   task('Domain renewal', 15, { points: 1 }),
   task('Write the launch post', 23, { points: 3, ref: 'launch-post' }),
@@ -342,7 +345,7 @@ const world = layout(buckets);
  */
 export const SEED = {
   version: 2,
-  seedVersion: 5,
+  seedVersion: 6,
   world,
   buckets,
   edges,
